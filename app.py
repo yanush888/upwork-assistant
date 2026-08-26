@@ -1,4 +1,5 @@
 import streamlit as st
+from openai import OpenAI
 
 st.set_page_config(
     page_title="Upwork Opportunity Assistant",
@@ -6,49 +7,99 @@ st.set_page_config(
     layout="centered"
 )
 
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 st.title("🎯 Upwork Opportunity Assistant")
 
 st.write(
-    "Paste an Upwork job description below and I will help you "
-    "decide whether it's worth applying."
+    "Paste an Upwork job description below. "
+    "The assistant will evaluate whether it is worth applying."
 )
 
 job_description = st.text_area(
     "Upwork Job Description",
-    height=300,
-    placeholder="Paste the job description here..."
+    height=350,
+    placeholder="Paste the full Upwork job description here..."
 )
 
 if st.button("Analyze Job", type="primary"):
 
-    if not job_description:
+    if not job_description.strip():
         st.warning("Please paste a job description first.")
 
     else:
-        st.success("Job received successfully!")
+        with st.spinner("Analyzing the job..."):
 
-        st.subheader("Opportunity Score")
+            prompt = f"""
+You are an Upwork opportunity analyst for a freelance specialist.
 
-        st.metric(
-            label="Match Score",
-            value="89 / 100"
-        )
+Freelancer profile:
+- High-end photo retoucher
+- Photoshop expert
+- AI image specialist
+- Product and Amazon image specialist
+- Architectural and interior photo retouching
+- Photorealistic AI compositing
+- Strong at combining AI generation with manual Photoshop finishing
+- Prefers higher-value projects over low-budget repetitive work
+- Wants long-term clients where possible
 
-        st.progress(89)
+Analyze the following Upwork job:
 
-        st.subheader("Recommendation")
-        st.write("🟢 HIGH PRIORITY — APPLY")
+{job_description}
 
-        st.subheader("Why this job may be a good fit")
+Return your analysis in this exact structure:
 
-        st.write("""
-        ✓ Relevant to your skills  
-        ✓ Potentially good client  
-        ✓ Good portfolio match  
-        ✓ Worth further analysis
-        """)
+OPPORTUNITY SCORE: X/100
 
-        st.info(
-            "This is the first test version. "
-            "AI analysis will be added next."
-        )
+RECOMMENDATION:
+Choose one:
+HIGH PRIORITY — APPLY
+GOOD — APPLY
+MAYBE
+SKIP
+
+SKILL MATCH:
+X/100
+
+CLIENT QUALITY:
+X/100 or "Unknown"
+
+BUDGET QUALITY:
+X/100 or "Unknown"
+
+COMPETITION:
+Low / Medium / High / Unknown
+
+WHY THIS JOB IS A GOOD FIT:
+- point
+- point
+- point
+
+RISKS:
+- point
+- point
+
+RECOMMENDED BID:
+Give a realistic bid or hourly rate. If insufficient information, say so.
+
+PORTFOLIO TO SHOW:
+Recommend 2-3 types of portfolio examples that would best match this job.
+
+PROPOSAL:
+Write a short, personalized Upwork proposal of approximately 100-150 words.
+Do not sound generic.
+Start by addressing the client's actual problem.
+Focus on photographic realism, relevant expertise, and how the job would be approached.
+Do not exaggerate experience.
+"""
+
+            response = client.responses.create(
+                model="gpt-5-mini",
+                input=prompt
+            )
+
+            result = response.output_text
+
+        st.success("Analysis complete")
+        st.markdown(result)
