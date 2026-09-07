@@ -134,6 +134,143 @@ def clean_value(value):
 
 
 # =====================================================
+# PREFILL JOB FROM FIND JOBS
+# =====================================================
+
+if st.session_state.get(
+    "load_job_into_analyzer"
+):
+
+    selected_job = st.session_state.get(
+        "selected_job",
+        {}
+    )
+
+    st.session_state[
+        "job_title_input"
+    ] = selected_job.get(
+        "title",
+        ""
+    )
+
+    st.session_state[
+        "job_url_input"
+    ] = selected_job.get(
+        "url",
+        ""
+    )
+
+    st.session_state[
+        "job_description_input"
+    ] = selected_job.get(
+        "description",
+        ""
+    )
+
+    st.session_state[
+        "budget_input"
+    ] = selected_job.get(
+        "budget",
+        ""
+    )
+
+    st.session_state[
+        "proposals_input"
+    ] = selected_job.get(
+        "proposals",
+        ""
+    )
+
+    st.session_state[
+        "interviewing_input"
+    ] = selected_job.get(
+        "interviewing",
+        ""
+    )
+
+    st.session_state[
+        "invites_input"
+    ] = selected_job.get(
+        "invites",
+        ""
+    )
+
+    st.session_state[
+        "unanswered_invites_input"
+    ] = selected_job.get(
+        "unanswered_invites",
+        ""
+    )
+
+    st.session_state[
+        "posted_input"
+    ] = selected_job.get(
+        "posted",
+        ""
+    )
+
+    st.session_state[
+        "client_spent_input"
+    ] = selected_job.get(
+        "client_spent",
+        ""
+    )
+
+    st.session_state[
+        "client_hires_input"
+    ] = selected_job.get(
+        "client_hires",
+        ""
+    )
+
+    st.session_state[
+        "client_rating_input"
+    ] = selected_job.get(
+        "client_rating",
+        ""
+    )
+
+    st.session_state[
+        "client_location_input"
+    ] = selected_job.get(
+        "client_location",
+        ""
+    )
+
+    st.session_state[
+        "active_hires_input"
+    ] = selected_job.get(
+        "active_hires",
+        ""
+    )
+
+    st.session_state[
+        "hours_billed_input"
+    ] = selected_job.get(
+        "hours_billed",
+        ""
+    )
+
+    st.session_state[
+        "member_since_input"
+    ] = selected_job.get(
+        "member_since",
+        ""
+    )
+
+    st.session_state[
+        "project_length_input"
+    ] = selected_job.get(
+        "project_length",
+        ""
+    )
+
+    st.session_state[
+        "load_job_into_analyzer"
+    ] = False
+
+
+# =====================================================
 # UPWORK OAUTH FUNCTIONS
 # =====================================================
 
@@ -284,21 +421,12 @@ with st.sidebar:
             "⚠️ Upwork API credentials are missing"
         )
 
-        st.caption(
-            "Add Client ID, Client Secret "
-            "and Redirect URI to Streamlit Secrets."
-        )
-
     elif st.session_state.get(
         "UPWORK_ACCESS_TOKEN"
     ):
 
         st.success(
             "✅ Upwork connected"
-        )
-
-        st.caption(
-            "OAuth authorization successful."
         )
 
         if st.button(
@@ -313,11 +441,6 @@ with st.sidebar:
 
             st.session_state.pop(
                 "UPWORK_REFRESH_TOKEN",
-                None
-            )
-
-            st.session_state.pop(
-                "UPWORK_TOKEN_EXPIRES_IN",
                 None
             )
 
@@ -351,34 +474,10 @@ with st.sidebar:
     2. Filter strong opportunities
     3. Analyze the opportunity
     4. Decide APPLY or SKIP
-    5. Save the result
-    6. Track Interview / Hired
+    5. Generate proposal
+    6. Save result
+    7. Track Interview / Hired
     """)
-
-    st.divider()
-
-    if not upwork_api_enabled:
-
-        st.caption(
-            "Automatic job search will become "
-            "available after Upwork activates "
-            "the API key."
-        )
-
-    elif st.session_state.get(
-        "UPWORK_ACCESS_TOKEN"
-    ):
-
-        st.caption(
-            "Upwork connected."
-        )
-
-    else:
-
-        st.caption(
-            "Connect your Upwork account "
-            "to enable automatic job import."
-        )
 
 
 # =====================================================
@@ -398,6 +497,20 @@ tab1, tab2, tab3 = st.tabs([
 
 with tab1:
 
+    if st.session_state.get(
+        "selected_job_loaded_message"
+    ):
+
+        st.success(
+            "✅ Job loaded from Find Jobs. "
+            "Review the information and click Analyze Job."
+        )
+
+        st.session_state[
+            "selected_job_loaded_message"
+        ] = False
+
+
     st.subheader(
         "Job Information"
     )
@@ -407,24 +520,22 @@ with tab1:
     )
 
 
-    # =================================================
-    # JOB DATA
-    # =================================================
-
     with col1:
 
         job_title = st.text_input(
             "Job title",
             placeholder=(
                 "Example: Amazon Product Image Retoucher"
-            )
+            ),
+            key="job_title_input"
         )
 
         job_url = st.text_input(
             "Upwork URL (optional)",
             placeholder=(
                 "https://www.upwork.com/jobs/..."
-            )
+            ),
+            key="job_url_input"
         )
 
         job_description = st.text_area(
@@ -432,13 +543,10 @@ with tab1:
             height=420,
             placeholder=(
                 "Paste the full Upwork job description here..."
-            )
+            ),
+            key="job_description_input"
         )
 
-
-    # =================================================
-    # BUDGET & COMPETITION
-    # =================================================
 
     with col2:
 
@@ -450,32 +558,38 @@ with tab1:
             "Budget / Hourly Rate",
             placeholder=(
                 "Example: $300 fixed or $25-$50/hr"
-            )
+            ),
+            key="budget_input"
         )
 
         proposals = st.text_input(
             "Proposals",
-            placeholder="Example: 10 to 15"
+            placeholder="Example: 10 to 15",
+            key="proposals_input"
         )
 
         interviewing = st.text_input(
             "Interviewing",
-            placeholder="Example: 2"
+            placeholder="Example: 2",
+            key="interviewing_input"
         )
 
         invites = st.text_input(
             "Invites sent",
-            placeholder="Example: 5"
+            placeholder="Example: 5",
+            key="invites_input"
         )
 
         unanswered_invites = st.text_input(
             "Unanswered invites",
-            placeholder="Example: 3"
+            placeholder="Example: 3",
+            key="unanswered_invites_input"
         )
 
         posted = st.text_input(
             "Posted",
-            placeholder="Example: 2 hours ago"
+            placeholder="Example: 2 hours ago",
+            key="posted_input"
         )
 
 
@@ -491,108 +605,90 @@ with tab1:
 
     c1, c2, c3, c4 = st.columns(4)
 
+
     with c1:
 
         client_spent = st.text_input(
             "Client total spent",
-            placeholder="Example: $50K+"
+            placeholder="Example: $50K+",
+            key="client_spent_input"
         )
+
 
     with c2:
 
         client_hires = st.text_input(
             "Client hires",
-            placeholder="Example: 35"
+            placeholder="Example: 35",
+            key="client_hires_input"
         )
+
 
     with c3:
 
         client_rating = st.text_input(
             "Client rating",
-            placeholder="Example: 4.95"
+            placeholder="Example: 4.95",
+            key="client_rating_input"
         )
+
 
     with c4:
 
         client_location = st.text_input(
             "Client location",
-            placeholder="Example: United States"
+            placeholder="Example: United States",
+            key="client_location_input"
         )
 
 
     c5, c6, c7, c8 = st.columns(4)
 
+
     with c5:
 
         client_active_hires = st.text_input(
             "Active hires",
-            placeholder="Example: 3"
+            placeholder="Example: 3",
+            key="active_hires_input"
         )
+
 
     with c6:
 
         client_hours = st.text_input(
             "Hours billed",
-            placeholder="Example: 1,250"
+            placeholder="Example: 1,250",
+            key="hours_billed_input"
         )
+
 
     with c7:
 
         client_member_since = st.text_input(
             "Member since",
-            placeholder="Example: 2018"
+            placeholder="Example: 2018",
+            key="member_since_input"
         )
+
 
     with c8:
 
         project_length = st.text_input(
             "Project length",
-            placeholder="Example: 1-3 months"
+            placeholder="Example: 1-3 months",
+            key="project_length_input"
         )
 
 
     st.info(
         "💡 The more Upwork data you add, "
-        "the more accurate the Opportunity Score will be. "
-        "Leave unavailable fields blank."
+        "the more accurate the Opportunity Score will be."
     )
 
 
     # =================================================
-    # AI EXPLANATION
-    # =================================================
-
-    with st.expander(
-        "🧠 What the AI evaluates"
-    ):
-
-        st.write("""
-        **Skill Match**  
-        How closely the project matches your strongest skills.
-
-        **Client Quality**  
-        Spending, hiring history, professionalism
-        and repeat-work potential.
-
-        **Budget Quality**  
-        Whether compensation makes sense
-        for the scope and your seniority.
-
-        **Competition**  
-        Proposals, interviews, invites
-        and how recently the job was posted.
-
-        **Win Probability**  
-        How likely you are to stand out
-        from other applicants.
-
-        **Opportunity Score**  
-        Overall business value of applying.
-        """)
-
-
-    # =================================================
-    # ANALYZE BUTTON
+    # ANALYZE
     # =================================================
 
     if st.button(
@@ -616,17 +712,13 @@ with tab1:
                 prompt = f"""
 You are a senior Upwork opportunity analyst.
 
-Your task is NOT simply to determine whether the freelancer
-can technically perform the job.
-
 Your task is to determine whether this is a GOOD BUSINESS
-OPPORTUNITY for this specific freelancer and whether the
-freelancer has a realistic competitive advantage.
+OPPORTUNITY for this specific freelancer.
 
-Do not inflate scores.
+Skill Match is NOT the same as Opportunity Score.
 
 =====================================================
-FREELANCER PROFILE
+FREELANCER
 =====================================================
 
 Positioning:
@@ -634,200 +726,96 @@ Positioning:
 - Amazon Listing Images Expert
 - High-End Photo Retoucher
 - Photoshop Expert
-- AI Image Specialist / AI Artist
+- AI Image Specialist
 - Product Image Specialist
 - E-commerce Image Specialist
 
-Upwork profile strength:
+Profile:
 
 - Top Rated
 - 100% Job Success
 - 5-star history
-- Strong completed-job history
 - Experienced freelancer
 
+Core strengths:
 
-=====================================================
-CORE SKILLS
-=====================================================
-
-- Amazon listing image creation
-- Amazon product images
-- E-commerce product photography
-- Product retouching
-- High-end Photoshop retouching
-- Natural photo retouching
-- AI-generated imagery
-- AI + Photoshop workflows
-- Photorealistic AI compositing
-- Product replacement
-- Lifestyle product integration
-- Maintaining exact product proportions
-- Maintaining texture and geometry
-- Background replacement
-- Complex compositing
-- Interior photo manipulation
-- Architectural photo editing
-- Furniture replacement
-- Natural portrait retouching
-- Correcting AI artifacts
-- Maintaining consistency across image series
-
-
-=====================================================
-COMPETITIVE ADVANTAGE
-=====================================================
-
-The freelancer combines AI generation with professional
-manual Photoshop finishing to achieve photographic realism.
-
-This is especially valuable for:
-
-- Amazon products
-- e-commerce images
-- lifestyle product scenes
-- difficult AI-generated images
+- Amazon listing images
+- product retouching
+- high-end Photoshop
+- AI + Photoshop
+- photorealistic AI compositing
+- lifestyle product integration
+- product replacement
+- preserving product geometry
+- background replacement
 - interior manipulation
-- high-end retouching
-- realistic compositing
+- architectural editing
+- natural portrait retouching
+- AI artifact correction
 
 
 =====================================================
-BUSINESS STRATEGY
+BUSINESS PRIORITIES
 =====================================================
 
-Strongly prioritize:
+Prioritize:
 
-1. Amazon / e-commerce product images
-2. AI + Photoshop projects
+1. Amazon / e-commerce
+2. AI + Photoshop
 3. Product/lifestyle compositing
-4. High-end photo retouching
-5. Interior / architectural manipulation
+4. High-end retouching
+5. Interior / architecture
 6. Recurring image production
 7. Agencies
-8. Established companies
-9. Long-term clients
-
-
-Prefer:
-
-- clients with proven Upwork spending
-- clients with previous hires
-- repeat work potential
-- professional briefs
-- quality-sensitive projects
-- higher-value projects
-- long-term relationships
-- jobs where photographic realism matters
-
+8. Established clients
+9. Long-term relationships
 
 Penalize:
 
 - extremely low budgets
-- unrealistic work quantity for the budget
-- commodity Photoshop jobs
+- unrealistic workload
+- low compensation per image
+- commodity Photoshop work
 - excessive unpaid tests
 - unclear scope
 - unrealistic deadlines
 - huge competition
-- clients interviewing many freelancers
-- extremely low compensation per image
-- weak hiring history
-
-
-=====================================================
-IMPORTANT SCORING PRINCIPLE
-=====================================================
-
-Skill Match is NOT the same as Opportunity Score.
-
-Example:
-
-SKILL MATCH: 98/100
-
-but
-
-OPPORTUNITY SCORE: 50/100
-
-if the client wants 70 images for only $100.
-
-Budget and business value must materially affect
-the final score.
-
-An extremely poor budget may justify a SKIP
-even with excellent Skill Match.
-
-
-=====================================================
-MISSING DATA RULE
-=====================================================
-
-Do NOT invent missing facts.
-
-Do not assume missing information is positive.
-
-When important information is missing,
-be conservative.
-
-
-=====================================================
-CATEGORY
-=====================================================
-
-Choose EXACTLY ONE:
-
-Amazon
-
-Product Retouching
-
-AI + Photoshop
-
-Interior / Architecture
-
-Portrait
-
-Other
+- many active interviews
+- price-driven clients
 
 
 =====================================================
 SCORING
 =====================================================
 
-SKILL MATCH:
-0-100
-
-
-CLIENT QUALITY:
-0-100 or Unknown
-
-
-BUDGET QUALITY:
-0-100 or Unknown
-
-
-COMPETITION SCORE:
-0-100 or Unknown
-
-
-WIN PROBABILITY:
-0-100
-
-
-OPPORTUNITY SCORE:
-0-100
-
-
-Suggested weighting:
-
 Skill Match: 25%
+
 Client Quality: 20%
+
 Budget Quality: 20%
+
 Competition: 15%
+
 Win Probability: 20%
 
 
+An excellent Skill Match must NOT compensate
+for a terrible budget.
+
+Example:
+
+70 skilled image edits for $100
+can be:
+
+SKILL MATCH: 95
+
+but
+
+OPPORTUNITY SCORE: 50
+
+
 =====================================================
-DECISION RULES
+DECISIONS
 =====================================================
 
 90-100:
@@ -844,60 +832,34 @@ DECISION RULES
 
 
 =====================================================
-UPWORK JOB
+JOB
 =====================================================
 
-JOB TITLE:
-
+TITLE:
 {clean_value(job_title)}
 
-
-JOB URL:
-
-{clean_value(job_url)}
-
-
-JOB DESCRIPTION:
-
+DESCRIPTION:
 {job_description}
 
-
-=====================================================
-BUDGET & COMPETITION
-=====================================================
-
-BUDGET / RATE:
-
+BUDGET:
 {clean_value(budget)}
 
-
 PROPOSALS:
-
 {clean_value(proposals)}
 
-
 INTERVIEWING:
-
 {clean_value(interviewing)}
 
-
-INVITES SENT:
-
+INVITES:
 {clean_value(invites)}
 
-
 UNANSWERED INVITES:
-
 {clean_value(unanswered_invites)}
 
-
 POSTED:
-
 {clean_value(posted)}
 
-
 PROJECT LENGTH:
-
 {clean_value(project_length)}
 
 
@@ -905,43 +867,30 @@ PROJECT LENGTH:
 CLIENT
 =====================================================
 
-TOTAL SPENT:
-
+SPENT:
 {clean_value(client_spent)}
 
-
-TOTAL HIRES:
-
+HIRES:
 {clean_value(client_hires)}
 
-
 ACTIVE HIRES:
-
 {clean_value(client_active_hires)}
 
-
-CLIENT RATING:
-
+RATING:
 {clean_value(client_rating)}
 
-
-HOURS BILLED:
-
+HOURS:
 {clean_value(client_hours)}
 
-
-CLIENT LOCATION:
-
+LOCATION:
 {clean_value(client_location)}
 
-
 MEMBER SINCE:
-
 {clean_value(client_member_since)}
 
 
 =====================================================
-RETURN EXACTLY THIS STRUCTURE
+OUTPUT
 =====================================================
 
 OPPORTUNITY SCORE: X/100
@@ -950,7 +899,17 @@ DECISION:
 decision
 
 CATEGORY:
-category
+Amazon
+or
+Product Retouching
+or
+AI + Photoshop
+or
+Interior / Architecture
+or
+Portrait
+or
+Other
 
 SKILL MATCH: X/100
 
@@ -980,14 +939,7 @@ DEAL BREAKERS:
 None or explain
 
 RECOMMENDED BID:
-Give one clear realistic pricing recommendation.
-
-Example:
-Recommended: $800-$1,000 fixed.
-
-If the client's budget is unrealistically low,
-say:
-Do not bid at the client's stated budget.
+Give one concise realistic recommendation.
 
 PORTFOLIO TO SHOW:
 1. example
@@ -1003,18 +955,12 @@ PROPOSAL:
 Write a personalized Upwork proposal
 of approximately 100-140 words.
 
-PROPOSAL RULES:
+Do not start with:
+"I am excited to apply."
 
-- Never start with "I am excited to apply"
-- Start with the client's actual problem
-- Sound human and confident
-- Be concise
-- Do not exaggerate
-- Mention only relevant experience
-- Mention AI + Photoshop only when relevant
-- Focus on the client's desired outcome
-- Avoid generic freelancer language
-- End with a simple call to action
+Start with the client's actual problem.
+
+Sound human, concise and confident.
 """
 
                 try:
@@ -1326,9 +1272,29 @@ with tab2:
 
 
     demo_jobs = [
+
         {
             "title":
                 "AI Product Image Generation + Canva Rebrand",
+
+            "url":
+                "",
+
+            "description":
+                """
+We need a freelancer to generate realistic product
+and fashion images for more than 30 products.
+
+The work includes changing fabric and environments
+while maintaining consistent garments and realistic
+photographic results.
+
+The freelancer will also create 5-7 Canva tiles
+per product.
+
+AI image generation experience combined with
+professional image editing is preferred.
+""",
 
             "category":
                 "AI + Photoshop",
@@ -1336,11 +1302,44 @@ with tab2:
             "budget":
                 "$25-$45/hr",
 
-            "client":
-                "$136K spent",
+            "client_spent":
+                "$136K",
+
+            "client_hires":
+                "242",
+
+            "client_rating":
+                "",
+
+            "client_location":
+                "United Kingdom",
+
+            "active_hires":
+                "",
+
+            "hours_billed":
+                "7,680",
+
+            "member_since":
+                "2012",
+
+            "project_length":
+                "1-3 months",
 
             "proposals":
                 "5-10",
+
+            "interviewing":
+                "0",
+
+            "invites":
+                "0",
+
+            "unanswered_invites":
+                "0",
+
+            "posted":
+                "4 hours ago",
 
             "score":
                 91,
@@ -1348,9 +1347,27 @@ with tab2:
             "decision":
                 "🔥 APPLY NOW"
         },
+
+
         {
             "title":
                 "High-End Interior Photoshop Expert",
+
+            "url":
+                "",
+
+            "description":
+                """
+We need an experienced Photoshop expert to edit
+approximately 8 high-end interior design photographs.
+
+Tasks include removing objects, replacing furniture,
+adding curtains and making all alterations look
+completely realistic.
+
+Previous AI attempts did not look convincing.
+We specifically need professional Photoshop work.
+""",
 
             "category":
                 "Interior / Architecture",
@@ -1358,11 +1375,44 @@ with tab2:
             "budget":
                 "$20-$45/hr",
 
-            "client":
-                "$4.1K spent",
+            "client_spent":
+                "$4.1K",
+
+            "client_hires":
+                "11",
+
+            "client_rating":
+                "",
+
+            "client_location":
+                "Australia",
+
+            "active_hires":
+                "4",
+
+            "hours_billed":
+                "152",
+
+            "member_since":
+                "",
+
+            "project_length":
+                "Less than 1 month",
 
             "proposals":
                 "20-50",
+
+            "interviewing":
+                "1",
+
+            "invites":
+                "0",
+
+            "unanswered_invites":
+                "0",
+
+            "posted":
+                "",
 
             "score":
                 88,
@@ -1370,9 +1420,29 @@ with tab2:
             "decision":
                 "🟢 APPLY"
         },
+
+
         {
             "title":
                 "Photo Editing and Retouching",
+
+            "url":
+                "",
+
+            "description":
+                """
+Branding and marketing agency is looking for
+a professional photo retoucher.
+
+The project includes fewer than 10 images.
+
+Tasks may include natural retouching,
+background replacement, expression adjustments
+and group compositing.
+
+Natural professional results are important.
+AI-assisted tools are welcome.
+""",
 
             "category":
                 "Product Retouching",
@@ -1380,11 +1450,44 @@ with tab2:
             "budget":
                 "$15-$35/hr",
 
-            "client":
-                "$11K spent",
+            "client_spent":
+                "$11K",
+
+            "client_hires":
+                "30",
+
+            "client_rating":
+                "",
+
+            "client_location":
+                "United States",
+
+            "active_hires":
+                "",
+
+            "hours_billed":
+                "499",
+
+            "member_since":
+                "",
+
+            "project_length":
+                "Less than 1 month",
 
             "proposals":
                 "15-20",
+
+            "interviewing":
+                "0",
+
+            "invites":
+                "0",
+
+            "unanswered_invites":
+                "0",
+
+            "posted":
+                "",
 
             "score":
                 84,
@@ -1392,9 +1495,31 @@ with tab2:
             "decision":
                 "🟢 APPLY"
         },
+
+
         {
             "title":
                 "Amazon Product Retoucher",
+
+            "url":
+                "",
+
+            "description":
+                """
+We need an experienced Photoshop product retoucher
+to edit 71 existing Amazon product images.
+
+Replace the fabric brand label on all 71 images
+while preserving realistic perspective, texture,
+lighting and stitching.
+
+Standardize 42 cosmetic pouch images so they match
+a reference image in position, scale, angle,
+background and lighting.
+
+Exact proportions, embroidery, colors, texture,
+zipper and seams must be preserved.
+""",
 
             "category":
                 "Amazon",
@@ -1402,11 +1527,44 @@ with tab2:
             "budget":
                 "$100 fixed",
 
-            "client":
-                "$2.4K spent",
+            "client_spent":
+                "$2.4K",
+
+            "client_hires":
+                "51",
+
+            "client_rating":
+                "",
+
+            "client_location":
+                "Germany",
+
+            "active_hires":
+                "4",
+
+            "hours_billed":
+                "",
+
+            "member_since":
+                "2013",
+
+            "project_length":
+                "",
 
             "proposals":
                 "15-20",
+
+            "interviewing":
+                "0",
+
+            "invites":
+                "0",
+
+            "unanswered_invites":
+                "0",
+
+            "posted":
+                "",
 
             "score":
                 51,
@@ -1414,9 +1572,25 @@ with tab2:
             "decision":
                 "🔴 SKIP"
         },
+
+
         {
             "title":
                 "Calendar Photoshop Adjustments",
+
+            "url":
+                "",
+
+            "description":
+                """
+We need a Photoshop retoucher to adjust
+approximately 20 calendar images.
+
+Tasks include changing calendar years from
+2026 to 2027, replacing calendar elements,
+matching colors and delivering high-resolution
+and web-resolution images.
+""",
 
             "category":
                 "Product Retouching",
@@ -1424,11 +1598,44 @@ with tab2:
             "budget":
                 "$10-$25/hr",
 
-            "client":
-                "$7K spent",
+            "client_spent":
+                "$7K",
+
+            "client_hires":
+                "78",
+
+            "client_rating":
+                "",
+
+            "client_location":
+                "United Kingdom",
+
+            "active_hires":
+                "28",
+
+            "hours_billed":
+                "245",
+
+            "member_since":
+                "",
+
+            "project_length":
+                "1-3 months",
 
             "proposals":
                 "10-15",
+
+            "interviewing":
+                "11",
+
+            "invites":
+                "30",
+
+            "unanswered_invites":
+                "19",
+
+            "posted":
+                "",
 
             "score":
                 58,
@@ -1480,7 +1687,8 @@ with tab2:
                 "Interior / Architecture",
                 "Portrait",
                 "Other"
-            ]
+            ],
+            key="find_category_filter"
         )
 
 
@@ -1552,14 +1760,16 @@ with tab2:
         )
 
 
-    for job in filtered_jobs:
+    for index, job in enumerate(
+        filtered_jobs
+    ):
 
         with st.container(
             border=True
         ):
 
-            col1, col2 = st.columns(
-                [4, 1]
+            col1, col2, col3 = st.columns(
+                [4, 1, 1]
             )
 
 
@@ -1589,7 +1799,7 @@ with tab2:
 
                     st.write(
                         f"**Client:** "
-                        f"{job['client']}"
+                        f"{job['client_spent']} spent"
                     )
 
                     st.write(
@@ -1601,7 +1811,7 @@ with tab2:
             with col2:
 
                 st.metric(
-                    "Opportunity Score",
+                    "Score",
                     f"{job['score']}/100"
                 )
 
@@ -1610,10 +1820,36 @@ with tab2:
                 )
 
 
+            with col3:
+
+                st.write("")
+
+                st.write("")
+
+                if st.button(
+                    "🎯 Analyze",
+                    key=f"analyze_demo_{index}",
+                    use_container_width=True
+                ):
+
+                    st.session_state[
+                        "selected_job"
+                    ] = job
+
+                    st.session_state[
+                        "load_job_into_analyzer"
+                    ] = True
+
+                    st.session_state[
+                        "selected_job_loaded_message"
+                    ] = True
+
+                    st.rerun()
+
+
     st.info(
-        "This is demo data. "
-        "After Upwork API approval, this tab will "
-        "load real marketplace jobs automatically."
+        "Demo data only. After Upwork API approval, "
+        "these cards will be populated with live marketplace jobs."
     )
 
 
@@ -1626,7 +1862,6 @@ with tab3:
     st.subheader(
         "📊 Job History"
     )
-
 
     try:
 
@@ -1641,7 +1876,6 @@ with tab3:
             .execute()
         )
 
-
         jobs = response.data
 
 
@@ -1651,12 +1885,7 @@ with tab3:
                 "No jobs saved yet."
             )
 
-
         else:
-
-            # =================================================
-            # OVERALL METRICS
-            # =================================================
 
             total_jobs = len(
                 jobs
@@ -1764,155 +1993,6 @@ with tab3:
                 )
 
 
-            # =================================================
-            # CATEGORY PERFORMANCE
-            # =================================================
-
-            st.divider()
-
-            st.subheader(
-                "🏆 Performance by Category"
-            )
-
-
-            categories = [
-                "Amazon",
-                "Product Retouching",
-                "AI + Photoshop",
-                "Interior / Architecture",
-                "Portrait",
-                "Other"
-            ]
-
-
-            category_stats = []
-
-
-            for category_name in categories:
-
-                category_jobs = [
-                    j for j in jobs
-                    if j.get("category")
-                    == category_name
-                ]
-
-
-                category_applied = [
-                    j for j in category_jobs
-                    if j.get("status")
-                    in [
-                        "Applied",
-                        "Interview",
-                        "Hired"
-                    ]
-                ]
-
-
-                category_interviews = [
-                    j for j in category_jobs
-                    if j.get("status")
-                    in [
-                        "Interview",
-                        "Hired"
-                    ]
-                ]
-
-
-                category_hired = [
-                    j for j in category_jobs
-                    if j.get("status")
-                    == "Hired"
-                ]
-
-
-                if len(category_jobs) > 0:
-
-                    if len(category_applied) > 0:
-
-                        category_interview_rate = (
-                            len(
-                                category_interviews
-                            )
-                            /
-                            len(
-                                category_applied
-                            )
-                            *
-                            100
-                        )
-
-                        category_hire_rate = (
-                            len(
-                                category_hired
-                            )
-                            /
-                            len(
-                                category_applied
-                            )
-                            *
-                            100
-                        )
-
-                    else:
-
-                        category_interview_rate = 0
-                        category_hire_rate = 0
-
-
-                    category_revenue = sum([
-                        float(
-                            j.get(
-                                "contract_value"
-                            )
-                            or 0
-                        )
-                        for j in category_jobs
-                        if j.get("status")
-                        == "Hired"
-                    ])
-
-
-                    category_stats.append({
-
-                        "Category":
-                            category_name,
-
-                        "Analyzed":
-                            len(category_jobs),
-
-                        "Applied":
-                            len(category_applied),
-
-                        "Interviews":
-                            len(category_interviews),
-
-                        "Hired":
-                            len(category_hired),
-
-                        "Interview Rate":
-                            f"{category_interview_rate:.1f}%",
-
-                        "Hire Rate":
-                            f"{category_hire_rate:.1f}%",
-
-                        "Value":
-                            f"${category_revenue:,.0f}"
-                    })
-
-
-            if category_stats:
-
-                st.dataframe(
-                    category_stats,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-
-            # =================================================
-            # SAVED JOBS
-            # =================================================
-
             st.divider()
 
             st.subheader(
@@ -1998,18 +2078,6 @@ with tab3:
                     )
 
 
-                    if job.get(
-                        "job_url"
-                    ):
-
-                        st.write(
-                            "**Upwork URL:**",
-                            job.get(
-                                "job_url"
-                            )
-                        )
-
-
                     statuses = [
                         "Not applied",
                         "Applied",
@@ -2074,10 +2142,8 @@ with tab3:
                                     new_value
 
                             }).eq(
-
                                 "id",
                                 job["id"]
-
                             ).execute()
 
 
