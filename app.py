@@ -1,5 +1,7 @@
 import streamlit as st
 import re
+import requests
+from urllib.parse import urlencode
 from openai import OpenAI
 from supabase import create_client
 
@@ -30,16 +32,51 @@ supabase = create_client(
 
 
 # =====================================================
+# UPWORK API SETTINGS
+# =====================================================
+
+UPWORK_AUTH_URL = (
+    "https://www.upwork.com/"
+    "ab/account-security/oauth2/authorize"
+)
+
+UPWORK_TOKEN_URL = (
+    "https://www.upwork.com/api/v3/oauth2/token"
+)
+
+UPWORK_GRAPHQL_URL = (
+    "https://api.upwork.com/graphql"
+)
+
+upwork_api_enabled = st.secrets.get(
+    "UPWORK_API_ENABLED",
+    False
+)
+
+upwork_client_id = st.secrets.get(
+    "UPWORK_CLIENT_ID",
+    ""
+)
+
+upwork_client_secret = st.secrets.get(
+    "UPWORK_CLIENT_SECRET",
+    ""
+)
+
+upwork_redirect_uri = st.secrets.get(
+    "UPWORK_REDIRECT_URI",
+    ""
+)
+
+
+# =====================================================
 # HELPER FUNCTIONS
 # =====================================================
 
 def extract_number(text, label):
-    """
-    Extracts a number from lines such as:
-    OPPORTUNITY SCORE: 87/100
-    """
 
     pattern = rf"{re.escape(label)}:\s*(\d+)"
+
     match = re.search(
         pattern,
         text,
@@ -57,9 +94,6 @@ def extract_section(
     section_name,
     next_section=None
 ):
-    """
-    Extracts text between two section headings.
-    """
 
     if next_section:
 
@@ -87,10 +121,6 @@ def extract_section(
 
 
 def clean_value(value):
-    """
-    Converts blank input into Unknown
-    for the AI prompt.
-    """
 
     if value is None:
         return "Unknown"
@@ -104,41 +134,142 @@ def clean_value(value):
 
 
 # =====================================================
+# UPWORK OAUTH FUNCTIONS
+# =====================================================
+
+def build_upwork_auth_url():
+
+    params = {
+        "response_type": "code",
+        "client_id": upwork_client_id,
+        "redirect_uri": upwork_redirect_uri
+    }
+
+    return (
+        UPWORK_AUTH_URL
+        + "?"
+        + urlencode(params)
+    )
+
+
+def exchange_upwork_code(code):
+
+    response = requests.post(
+        UPWORK_TOKEN_URL,
+        headers={
+            "Accept": "application/json",
+            "Content-Type":
+                "application/x-www-form-urlencoded"
+        },
+        data={
+            "grant_type":
+                "authorization_code",
+
+            "client_id":
+                upwork_client_id,
+
+            "client_secret":
+                upwork_client_secret,
+
+            "code":
+                code,
+
+            "redirect_uri":
+                upwork_redirect_uri
+        },
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# =====================================================
+# HANDLE UPWORK OAUTH CALLBACK
+# =====================================================
+
+if upwork_api_enabled:
+
+    oauth_code = st.query_params.get(
+        "code"
+    )
+
+    if (
+        oauth_code
+        and
+        "UPWORK_ACCESS_TOKEN"
+        not in st.session_state
+    ):
+
+        try:
+
+            token_data = exchange_upwork_code(
+                oauth_code
+            )
+
+            st.session_state[
+                "UPWORK_ACCESS_TOKEN"
+            ] = token_data.get(
+                "access_token"
+            )
+
+            st.session_state[
+                "UPWORK_REFRESH_TOKEN"
+            ] = token_data.get(
+                "refresh_token"
+            )
+
+            st.session_state[
+                "UPWORK_TOKEN_EXPIRES_IN"
+            ] = token_data.get(
+                "expires_in"
+            )
+
+            st.query_params.clear()
+
+            st.rerun()
+
+        except Exception as e:
+
+            st.error(
+                "Upwork authorization failed."
+            )
+
+            st.code(
+                str(e)
+            )
+
+
+# =====================================================
 # HEADER
 # =====================================================
 
-st.title("🎯 Upwork Opportunity Assistant")
+st.title(
+    "🎯 Upwork Opportunity Assistant"
+)
 
 st.caption(
-    "Find the Upwork opportunities that are actually worth applying to."
+    "Find the Upwork opportunities "
+    "that are actually worth applying to."
 )
 
 
 # =====================================================
-# UPWORK API SIDEBAR
+# SIDEBAR
 # =====================================================
 
 with st.sidebar:
 
-    st.header("🔗 Upwork API")
-
-    upwork_api_enabled = st.secrets.get(
-        "UPWORK_API_ENABLED",
-        False
+    st.header(
+        "🔗 Upwork API"
     )
 
-    if upwork_api_enabled:
+    # -------------------------------------------------
+    # API NOT YET APPROVED
+    # -------------------------------------------------
 
-        st.success(
-            "✅ Upwork API enabled"
-        )
-
-        st.caption(
-            "The app is ready for automatic "
-            "Upwork integration."
-        )
-
-    else:
+    if not upwork_api_enabled:
 
         st.warning(
             "⏳ Waiting for Upwork API approval"
@@ -148,9 +279,94 @@ with st.sidebar:
             "Manual job analysis remains available."
         )
 
+    # -------------------------------------------------
+    # API ENABLED BUT SECRETS MISSING
+    # -------------------------------------------------
+
+    elif not all([
+        upwork_client_id,
+        upwork_client_secret,
+        upwork_redirect_uri
+    ]):
+
+        st.error(
+            "⚠️ Upwork API credentials are missing"
+        )
+
+        st.caption(
+            "Add Client ID, Client Secret "
+            "and Redirect URI to Streamlit Secrets."
+        )
+
+    # -------------------------------------------------
+    # CONNECTED
+    # -------------------------------------------------
+
+    elif st.session_state.get(
+        "UPWORK_ACCESS_TOKEN"
+    ):
+
+        st.success(
+            "✅ Upwork connected"
+        )
+
+        st.caption(
+            "OAuth authorization successful."
+        )
+
+        if st.button(
+            "Disconnect Upwork",
+            use_container_width=True
+        ):
+
+            st.session_state.pop(
+                "UPWORK_ACCESS_TOKEN",
+                None
+            )
+
+            st.session_state.pop(
+                "UPWORK_REFRESH_TOKEN",
+                None
+            )
+
+            st.session_state.pop(
+                "UPWORK_TOKEN_EXPIRES_IN",
+                None
+            )
+
+            st.rerun()
+
+    # -------------------------------------------------
+    # API APPROVED, READY TO CONNECT
+    # -------------------------------------------------
+
+    else:
+
+        st.info(
+            "🔑 API ready"
+        )
+
+        st.caption(
+            "Connect your Upwork account "
+            "to enable automatic job import."
+        )
+
+        authorization_url = (
+            build_upwork_auth_url()
+        )
+
+        st.link_button(
+            "Connect Upwork",
+            authorization_url,
+            use_container_width=True
+        )
+
+
     st.divider()
 
-    st.markdown("### 🎯 Workflow")
+    st.markdown(
+        "### 🎯 Workflow"
+    )
 
     st.write("""
     1. Find an Upwork job
@@ -162,10 +378,28 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption(
-        "Automatic job search will be added "
-        "after Upwork activates the API key."
-    )
+    if not upwork_api_enabled:
+
+        st.caption(
+            "Automatic job search will become "
+            "available after Upwork activates "
+            "the API key."
+        )
+
+    elif st.session_state.get(
+        "UPWORK_ACCESS_TOKEN"
+    ):
+
+        st.caption(
+            "Next step: marketplace job search."
+        )
+
+    else:
+
+        st.caption(
+            "Automatic job search becomes "
+            "available after authorization."
+        )
 
 
 # =====================================================
@@ -184,9 +418,13 @@ tab1, tab2 = st.tabs([
 
 with tab1:
 
-    st.subheader("Job Information")
+    st.subheader(
+        "Job Information"
+    )
 
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns(
+        [2, 1]
+    )
 
 
     # =================================================
@@ -198,20 +436,24 @@ with tab1:
         job_title = st.text_input(
             "Job title",
             placeholder=(
-                "Example: Amazon Product Image Retoucher"
+                "Example: Amazon Product "
+                "Image Retoucher"
             )
         )
 
         job_url = st.text_input(
             "Upwork URL (optional)",
-            placeholder="https://www.upwork.com/jobs/..."
+            placeholder=(
+                "https://www.upwork.com/jobs/..."
+            )
         )
 
         job_description = st.text_area(
             "Job description",
             height=420,
             placeholder=(
-                "Paste the full Upwork job description here..."
+                "Paste the full Upwork "
+                "job description here..."
             )
         )
 
@@ -229,13 +471,16 @@ with tab1:
         budget = st.text_input(
             "Budget / Hourly Rate",
             placeholder=(
-                "Example: $300 fixed or $25-$50/hr"
+                "Example: $300 fixed "
+                "or $25-$50/hr"
             )
         )
 
         proposals = st.text_input(
             "Proposals",
-            placeholder="Example: 10 to 15"
+            placeholder=(
+                "Example: 10 to 15"
+            )
         )
 
         interviewing = st.text_input(
@@ -255,7 +500,9 @@ with tab1:
 
         posted = st.text_input(
             "Posted",
-            placeholder="Example: 2 hours ago"
+            placeholder=(
+                "Example: 2 hours ago"
+            )
         )
 
 
@@ -342,13 +589,13 @@ with tab1:
 
     st.info(
         "💡 The more Upwork data you add, "
-        "the more accurate the Opportunity Score will be. "
-        "Leave unavailable fields blank."
+        "the more accurate the Opportunity Score "
+        "will be. Leave unavailable fields blank."
     )
 
 
     # =================================================
-    # EXPLANATION
+    # AI EXPLANATION
     # =================================================
 
     with st.expander(
@@ -357,11 +604,12 @@ with tab1:
 
         st.write("""
         **Skill Match**  
-        How closely the project matches your strongest skills.
+        How closely the project matches your
+        strongest skills.
 
         **Client Quality**  
-        Spending, hiring history, professionalism
-        and repeat-work potential.
+        Spending, hiring history,
+        professionalism and repeat-work potential.
 
         **Budget Quality**  
         Whether compensation makes sense
@@ -373,10 +621,10 @@ with tab1:
 
         **Win Probability**  
         How likely you are to stand out
-        from the other applicants.
+        from other applicants.
 
         **Opportunity Score**  
-        The overall business value of applying.
+        Overall business value of applying.
         """)
 
 
@@ -405,17 +653,19 @@ with tab1:
                 prompt = f"""
 You are a senior Upwork opportunity analyst.
 
-Your task is NOT simply to determine whether the freelancer can
-technically perform the job.
+Your task is NOT simply to determine whether
+the freelancer can technically perform the job.
 
-Your task is to determine whether this is a GOOD BUSINESS OPPORTUNITY
-for this specific freelancer and whether the freelancer has a realistic
-competitive advantage.
+Your task is to determine whether this is a
+GOOD BUSINESS OPPORTUNITY for this specific
+freelancer and whether the freelancer has a
+realistic competitive advantage.
 
 Do not inflate scores.
 
-A freelancer being capable of doing the work does NOT automatically
-mean that the job is worth applying to.
+A freelancer being capable of doing the work
+does NOT automatically mean that the job is
+worth applying to.
 
 
 =====================================================
@@ -471,11 +721,12 @@ CORE SKILLS
 COMPETITIVE ADVANTAGE
 =====================================================
 
-The freelancer is particularly strong when pure AI generation
-is not sufficient.
+The freelancer is particularly strong
+when pure AI generation is not sufficient.
 
-The freelancer combines AI generation with professional manual
-Photoshop finishing to achieve photographic realism.
+The freelancer combines AI generation
+with professional manual Photoshop finishing
+to achieve photographic realism.
 
 This is especially valuable for:
 
@@ -520,27 +771,26 @@ Prefer:
 Penalize:
 
 - extremely low budgets
-- unrealistic amount of work for the budget
+- unrealistic amount of work for budget
 - commodity Photoshop jobs
 - excessive unpaid tests
 - unclear scope
 - unrealistic deadlines
 - huge competition
-- clients already interviewing many freelancers
-- jobs where price appears to be the primary selection factor
-- jobs where effective compensation per image is extremely low
-- clients with weak hiring history when better opportunities exist
+- clients interviewing many freelancers
+- jobs where price is the main factor
+- extremely low compensation per image
+- weak hiring history
 
 
 =====================================================
 IMPORTANT SCORING PRINCIPLE
 =====================================================
 
-Skill Match is NOT the same as Opportunity Score.
+Skill Match is NOT the same
+as Opportunity Score.
 
-For example:
-
-A job may have:
+Example:
 
 SKILL MATCH: 98/100
 
@@ -548,37 +798,37 @@ but
 
 OPPORTUNITY SCORE: 50/100
 
-if the client wants 70 images for only $100.
+if the client wants 70 images
+for only $100.
 
-Budget and business value must materially affect the final score.
+Budget and business value must materially
+affect the final score.
 
-If the project requires a large amount of skilled work for very
-little money, the Opportunity Score should be LOW even if the
-Skill Match is excellent.
+An extremely poor budget may justify
+a SKIP even with excellent Skill Match.
 
 
 =====================================================
 MISSING DATA RULE
 =====================================================
 
-Some marketplace information may be marked "Unknown".
+Some marketplace information
+may be marked "Unknown".
 
 Do NOT invent missing facts.
 
-If client spending, proposals, interviews or budget are unknown,
-explicitly treat them as unknown.
+Do not assume missing information
+is positive.
 
-Do not assume missing information is positive.
-
-If several important business variables are unknown,
-be more conservative with the Opportunity Score.
+When important information is missing,
+be conservative.
 
 
 =====================================================
 CATEGORY
 =====================================================
 
-Choose EXACTLY ONE category:
+Choose EXACTLY ONE:
 
 Amazon
 
@@ -593,137 +843,75 @@ Portrait
 Other
 
 
-CATEGORY RULES:
-
-Amazon:
-Amazon listing images, A+ content, Amazon product graphics,
-Amazon lifestyle images.
-
-Product Retouching:
-Product photography, e-commerce images, product cleanup,
-color correction, product editing.
-
-AI + Photoshop:
-AI-generated images, generative AI, AI compositing,
-AI correction, AI + manual Photoshop workflows.
-
-Interior / Architecture:
-Interior photography, real estate, architecture,
-furniture replacement, room manipulation.
-
-Portrait:
-People, faces, beauty, skin, portrait photography,
-headshots.
-
-Other:
-Use only when none of the categories above fit well.
-
-
 =====================================================
 SCORING
 =====================================================
 
-Calculate:
-
-
 SKILL MATCH:
 0-100
 
-How closely the work matches the freelancer's strongest skills.
-
 
 CLIENT QUALITY:
-0-100
+0-100 or Unknown
 
 Consider:
 
-- previous spending
-- number of hires
+- spending
+- hires
 - active hires
 - rating
 - professionalism
-- clarity of brief
-- history on Upwork
-- repeat work potential
-
-If meaningful client information is missing, return:
-
-Unknown
+- brief quality
+- Upwork history
+- repeat potential
 
 
 BUDGET QUALITY:
-0-100
-
-Evaluate compensation relative to:
-
-- scope
-- number of images
-- complexity
-- required expertise
-- likely hours required
-- freelancer seniority
-
-Do NOT reward low-paying projects simply because they are easy.
-
-Pay special attention to effective compensation per image
-when image quantity is provided.
-
-If budget information is missing, return:
-
-Unknown
-
-
-COMPETITION SCORE:
-0-100
-
-100 means very favorable competition.
-
-0 means extremely unfavorable competition.
+0-100 or Unknown
 
 Consider:
 
-- number of proposals
+- scope
+- quantity
+- complexity
+- expertise
+- estimated hours
+- freelancer seniority
+- effective compensation per image
+
+
+COMPETITION SCORE:
+0-100 or Unknown
+
+100 = favorable.
+
+0 = unfavorable.
+
+Consider:
+
+- proposals
 - interviews
-- invitations
-- unanswered invitations
-- how recently the job was posted
-
-Examples:
-
-Few proposals + zero interviews = favorable.
-
-Many proposals + many interviews = unfavorable.
-
-Large number of invitations may mean the client is aggressively
-shopping among freelancers.
-
-If competition information is missing, return:
-
-Unknown
+- invites
+- unanswered invites
+- job age
 
 
 WIN PROBABILITY:
 0-100
 
-Estimate how likely THIS freelancer is to stand out from other
-applicants.
-
 Consider:
 
 - specialization
-- Top Rated status
+- Top Rated
 - 100% JSS
-- relevant portfolio
-- client's exact problem
+- portfolio relevance
+- client problem
 - AI + Photoshop advantage
-- competition level
-- whether the job clearly matches the freelancer's positioning
+- competition
 
 
 OPPORTUNITY SCORE:
 0-100
-
-This represents overall business value.
 
 Suggested weighting:
 
@@ -735,45 +923,22 @@ Win Probability: 20%
 
 Use professional judgment.
 
-Do not blindly calculate a mathematical average
-if a major deal breaker exists.
-
-For example:
-
-An extremely poor budget may justify a SKIP
-even with excellent Skill Match.
-
 
 =====================================================
 DECISION RULES
 =====================================================
 
 90-100:
-
 🔥 APPLY NOW
 
-
 80-89:
-
 🟢 APPLY
 
-
 65-79:
-
 🟡 MAYBE
 
-
 0-64:
-
 🔴 SKIP
-
-
-Be selective.
-
-The purpose is to avoid wasting time
-and Upwork Connects.
-
-A SKIP is a useful result.
 
 
 =====================================================
@@ -915,18 +1080,12 @@ None or explain
 RECOMMENDED BID:
 Give one clear realistic pricing recommendation.
 
-Format it concisely.
-
 Example:
 Recommended: $800-$1,000 fixed.
 
 If the client's budget is unrealistically low,
 say:
-
 Do not bid at the client's stated budget.
-
-Do not produce multiple complicated pricing formulas
-unless absolutely necessary.
 
 PORTFOLIO TO SHOW:
 1. example
@@ -948,17 +1107,15 @@ PROPOSAL RULES
 =====================================================
 
 - Never start with "I am excited to apply"
-- Never start with generic freelancer language
 - Start with the client's actual problem
 - Sound human and confident
 - Be concise
 - Do not exaggerate
 - Mention only relevant experience
 - Mention AI + Photoshop only when relevant
-- Focus on the result the client wants
+- Focus on the client's desired outcome
 - Avoid long software lists
-- Avoid repeating the full job description
-- Avoid sounding like AI-generated text
+- Avoid generic freelancer language
 - End with a simple call to action
 """
 
@@ -973,8 +1130,6 @@ PROPOSAL RULES
 
                     result = response.output_text
 
-
-                    # Save analysis to session
 
                     st.session_state[
                         "analysis"
@@ -996,8 +1151,8 @@ PROPOSAL RULES
                 except Exception as e:
 
                     st.error(
-                        "The AI analysis could not "
-                        "be completed."
+                        "The AI analysis could "
+                        "not be completed."
                     )
 
                     st.code(
@@ -1025,10 +1180,6 @@ PROPOSAL RULES
             result
         )
 
-
-        # ---------------------------------------------
-        # EXTRACT DATA
-        # ---------------------------------------------
 
         opportunity_score = extract_number(
             result,
@@ -1067,13 +1218,11 @@ PROPOSAL RULES
             "CATEGORY"
         )
 
-
         category = extract_section(
             result,
             "CATEGORY",
             "SKILL MATCH"
         )
-
 
         proposal = extract_section(
             result,
@@ -1081,9 +1230,9 @@ PROPOSAL RULES
         )
 
 
-        # ---------------------------------------------
+        # =================================================
         # SCORE CARDS
-        # ---------------------------------------------
+        # =================================================
 
         st.divider()
 
@@ -1104,7 +1253,6 @@ PROPOSAL RULES
             )
         )
 
-
         c2.metric(
             "Skill Match",
             (
@@ -1113,7 +1261,6 @@ PROPOSAL RULES
                 else "—"
             )
         )
-
 
         c3.metric(
             "Win Probability",
@@ -1137,7 +1284,6 @@ PROPOSAL RULES
             )
         )
 
-
         c5.metric(
             "Budget Quality",
             (
@@ -1146,7 +1292,6 @@ PROPOSAL RULES
                 else "Unknown"
             )
         )
-
 
         c6.metric(
             "Competition",
@@ -1163,16 +1308,15 @@ PROPOSAL RULES
             category
         )
 
-
         st.write(
             "**Decision:**",
             decision
         )
 
 
-        # ---------------------------------------------
+        # =================================================
         # SAVE JOB
-        # ---------------------------------------------
+        # =================================================
 
         st.divider()
 
@@ -1320,10 +1464,6 @@ with tab2:
 
         else:
 
-            # =========================================
-            # OVERALL METRICS
-            # =========================================
-
             total_jobs = len(
                 jobs
             )
@@ -1380,24 +1520,20 @@ with tab2:
                 total_jobs
             )
 
-
             col2.metric(
                 "Applied",
                 applied
             )
-
 
             col3.metric(
                 "Interviews",
                 interviews
             )
 
-
             col4.metric(
                 "Hired",
                 hired
             )
-
 
             col5.metric(
                 "Contract Value",
@@ -1412,7 +1548,6 @@ with tab2:
                     applied *
                     100
                 )
-
 
                 hire_rate = (
                     hired /
@@ -1429,16 +1564,15 @@ with tab2:
                     f"{interview_rate:.1f}%"
                 )
 
-
                 c2.metric(
                     "Hire Rate",
                     f"{hire_rate:.1f}%"
                 )
 
 
-            # =========================================
-            # CATEGORY PERFORMANCE
-            # =========================================
+            # =================================================
+            # PERFORMANCE BY CATEGORY
+            # =================================================
 
             st.divider()
 
@@ -1551,24 +1685,16 @@ with tab2:
                             category_name,
 
                         "Analyzed":
-                            len(
-                                category_jobs
-                            ),
+                            len(category_jobs),
 
                         "Applied":
-                            len(
-                                category_applied
-                            ),
+                            len(category_applied),
 
                         "Interviews":
-                            len(
-                                category_interviews
-                            ),
+                            len(category_interviews),
 
                         "Hired":
-                            len(
-                                category_hired
-                            ),
+                            len(category_hired),
 
                         "Interview Rate":
                             (
@@ -1581,9 +1707,7 @@ with tab2:
                             ),
 
                         "Value":
-                            (
-                                f"${category_revenue:,.0f}"
-                            )
+                            f"${category_revenue:,.0f}"
                     })
 
 
@@ -1595,17 +1719,10 @@ with tab2:
                     hide_index=True
                 )
 
-            else:
 
-                st.info(
-                    "Category statistics will appear "
-                    "after you save new analyzed jobs."
-                )
-
-
-            # =========================================
-            # JOB LIST
-            # =========================================
+            # =================================================
+            # SAVED OPPORTUNITIES
+            # =================================================
 
             st.divider()
 
@@ -1617,38 +1734,25 @@ with tab2:
             for job in jobs:
 
                 title = (
-                    job.get(
-                        "job_title"
-                    )
-                    or
-                    "Untitled Job"
+                    job.get("job_title")
+                    or "Untitled Job"
                 )
-
 
                 score = (
                     job.get(
                         "opportunity_score"
                     )
-                    or
-                    "—"
+                    or "—"
                 )
-
 
                 job_status = (
-                    job.get(
-                        "status"
-                    )
-                    or
-                    "Not applied"
+                    job.get("status")
+                    or "Not applied"
                 )
 
-
                 job_category = (
-                    job.get(
-                        "category"
-                    )
-                    or
-                    "Uncategorized"
+                    job.get("category")
+                    or "Uncategorized"
                 )
 
 
@@ -1670,8 +1774,7 @@ with tab2:
                         job.get(
                             "opportunity_score"
                         )
-                        or
-                        "—"
+                        or "—"
                     )
 
 
@@ -1680,8 +1783,7 @@ with tab2:
                         job.get(
                             "skill_match"
                         )
-                        or
-                        "—"
+                        or "—"
                     )
 
 
@@ -1690,8 +1792,7 @@ with tab2:
                         job.get(
                             "win_probability"
                         )
-                        or
-                        "—"
+                        or "—"
                     )
 
 
@@ -1706,8 +1807,7 @@ with tab2:
                         job.get(
                             "decision"
                         )
-                        or
-                        "—"
+                        or "—"
                     )
 
 
@@ -1739,35 +1839,30 @@ with tab2:
                         )
 
 
-                    new_status = (
-                        st.selectbox(
-                            "Update status",
-                            statuses,
-                            index=statuses.index(
-                                job_status
-                            ),
-                            key=(
-                                f"status_{job['id']}"
-                            )
+                    new_status = st.selectbox(
+                        "Update status",
+                        statuses,
+                        index=statuses.index(
+                            job_status
+                        ),
+                        key=(
+                            f"status_{job['id']}"
                         )
                     )
 
 
-                    new_value = (
-                        st.number_input(
-                            "Contract value ($)",
-                            min_value=0.0,
-                            value=float(
-                                job.get(
-                                    "contract_value"
-                                )
-                                or
-                                0
-                            ),
-                            step=50.0,
-                            key=(
-                                f"value_{job['id']}"
+                    new_value = st.number_input(
+                        "Contract value ($)",
+                        min_value=0.0,
+                        value=float(
+                            job.get(
+                                "contract_value"
                             )
+                            or 0
+                        ),
+                        step=50.0,
+                        key=(
+                            f"value_{job['id']}"
                         )
                     )
 
@@ -1802,7 +1897,6 @@ with tab2:
                             st.success(
                                 "✅ Updated!"
                             )
-
 
                             st.rerun()
 
