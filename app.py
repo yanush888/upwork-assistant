@@ -68,6 +68,23 @@ def extract_section(text, section_name, next_section=None):
     return ""
 
 
+def clean_value(value):
+    """
+    Converts blank input into 'Unknown'
+    for the AI prompt.
+    """
+
+    if value is None:
+        return "Unknown"
+
+    value = str(value).strip()
+
+    if not value:
+        return "Unknown"
+
+    return value
+
+
 # =====================================================
 # HEADER
 # =====================================================
@@ -90,7 +107,13 @@ tab1, tab2 = st.tabs([
 
 with tab1:
 
+    st.subheader("Job Information")
+
     col1, col2 = st.columns([2, 1])
+
+    # =================================================
+    # MAIN JOB DATA
+    # =================================================
 
     with col1:
 
@@ -110,23 +133,146 @@ with tab1:
             placeholder="Paste the full Upwork job description here..."
         )
 
+    # =================================================
+    # MARKETPLACE DATA
+    # =================================================
+
     with col2:
 
-        st.subheader("What AI evaluates")
+        st.markdown("### 💰 Budget & Competition")
+
+        budget = st.text_input(
+            "Budget / Hourly Rate",
+            placeholder="Example: $300 fixed or $25-$50/hr"
+        )
+
+        proposals = st.text_input(
+            "Proposals",
+            placeholder="Example: 10 to 15"
+        )
+
+        interviewing = st.text_input(
+            "Interviewing",
+            placeholder="Example: 2"
+        )
+
+        invites = st.text_input(
+            "Invites sent",
+            placeholder="Example: 5"
+        )
+
+        unanswered_invites = st.text_input(
+            "Unanswered invites",
+            placeholder="Example: 3"
+        )
+
+        posted = st.text_input(
+            "Posted",
+            placeholder="Example: 2 hours ago"
+        )
+
+
+    # =================================================
+    # CLIENT DATA
+    # =================================================
+
+    st.divider()
+
+    st.markdown("### 👤 Client Information")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        client_spent = st.text_input(
+            "Client total spent",
+            placeholder="Example: $50K+"
+        )
+
+    with c2:
+
+        client_hires = st.text_input(
+            "Client hires",
+            placeholder="Example: 35"
+        )
+
+    with c3:
+
+        client_rating = st.text_input(
+            "Client rating",
+            placeholder="Example: 4.95"
+        )
+
+    with c4:
+
+        client_location = st.text_input(
+            "Client location",
+            placeholder="Example: United States"
+        )
+
+
+    c5, c6, c7, c8 = st.columns(4)
+
+    with c5:
+
+        client_active_hires = st.text_input(
+            "Active hires",
+            placeholder="Example: 3"
+        )
+
+    with c6:
+
+        client_hours = st.text_input(
+            "Hours billed",
+            placeholder="Example: 1,250"
+        )
+
+    with c7:
+
+        client_member_since = st.text_input(
+            "Member since",
+            placeholder="Example: 2018"
+        )
+
+    with c8:
+
+        project_length = st.text_input(
+            "Project length",
+            placeholder="Example: 1-3 months"
+        )
+
+
+    st.info(
+        "💡 The more Upwork data you add, the more accurate the "
+        "Opportunity Score will be. Leave unavailable fields blank."
+    )
+
+
+    # =================================================
+    # WHAT AI EVALUATES
+    # =================================================
+
+    with st.expander("🧠 What the AI evaluates"):
 
         st.write("""
-        • Skill Match  
-        • Client Quality  
-        • Budget Quality  
-        • Competition  
-        • Win Probability  
-        • Business Value  
-        """)
+        **Skill Match**  
+        How closely the project matches your strongest skills.
 
-        st.info(
-            "The goal is not to find jobs you CAN do. "
-            "The goal is to find jobs worth winning."
-        )
+        **Client Quality**  
+        Spending, hiring history, professionalism and repeat-work potential.
+
+        **Budget Quality**  
+        Whether compensation makes sense for the scope and your seniority.
+
+        **Competition**  
+        Proposals, interviews, invites and how recently the job was posted.
+
+        **Win Probability**  
+        How likely you are to stand out from the other applicants.
+
+        **Opportunity Score**  
+        The overall business value of applying.
+        """)
 
 
     # =================================================
@@ -134,7 +280,7 @@ with tab1:
     # =================================================
 
     if st.button(
-        "Analyze Job",
+        "🚀 Analyze Job",
         type="primary",
         use_container_width=True
     ):
@@ -160,6 +306,12 @@ technically perform the job.
 Your task is to determine whether this is a GOOD BUSINESS OPPORTUNITY
 for this specific freelancer and whether the freelancer has a realistic
 competitive advantage.
+
+Do not inflate scores.
+
+A freelancer being capable of doing the work does NOT automatically
+mean that the job is worth applying to.
+
 
 =====================================================
 FREELANCER PROFILE
@@ -271,6 +423,8 @@ Penalize:
 - huge competition
 - clients already interviewing many freelancers
 - jobs where price appears to be the primary selection factor
+- jobs where the effective compensation per image is extremely low
+- clients with a weak hiring history when better opportunities exist
 
 
 =====================================================
@@ -291,8 +445,28 @@ OPPORTUNITY SCORE: 50/100
 
 if the client wants 70 images for only $100.
 
-Do not inflate Opportunity Score simply because the freelancer
-can technically perform the work.
+Budget and business value must materially affect the final score.
+
+If the project requires a large amount of skilled work for very
+little money, the Opportunity Score should be LOW even if the
+Skill Match is excellent.
+
+
+=====================================================
+MISSING DATA RULE
+=====================================================
+
+Some marketplace information may be marked "Unknown".
+
+Do NOT invent missing facts.
+
+If client spending, proposals, interviews or budget are unknown,
+explicitly treat them as unknown.
+
+Do not assume missing information is positive.
+
+If several important business variables are unknown, be more
+conservative with the Opportunity Score.
 
 
 =====================================================
@@ -346,6 +520,7 @@ SCORING
 
 Calculate:
 
+
 SKILL MATCH:
 0-100
 
@@ -358,12 +533,15 @@ CLIENT QUALITY:
 Consider:
 
 - previous spending
-- hiring history
+- number of hires
+- active hires
+- rating
 - professionalism
 - clarity of brief
-- potential repeat work
+- history on Upwork
+- repeat work potential
 
-If information is missing, return:
+If meaningful client information is missing, return:
 
 Unknown
 
@@ -376,9 +554,14 @@ Evaluate compensation relative to:
 - scope
 - number of images
 - complexity
+- required expertise
+- likely hours required
 - freelancer seniority
 
-Do NOT reward low-paying projects just because they are easy.
+Do NOT reward low-paying projects simply because they are easy.
+
+Pay special attention to effective compensation per image
+when image quantity is provided.
 
 If budget information is missing, return:
 
@@ -388,18 +571,28 @@ Unknown
 COMPETITION SCORE:
 0-100
 
-100 = very favorable competition.
+100 means very favorable competition.
 
-0 = extremely unfavorable competition.
+0 means extremely unfavorable competition.
 
 Consider:
 
-- proposals
+- number of proposals
 - interviews
 - invitations
+- unanswered invitations
 - how recently the job was posted
 
-If information is missing, return:
+Examples:
+
+Few proposals + zero interviews = favorable.
+
+Many proposals + many interviews = unfavorable.
+
+Large number of invitations may mean the client is aggressively
+shopping among freelancers.
+
+If competition information is missing, return:
 
 Unknown
 
@@ -413,17 +606,19 @@ applicants.
 Consider:
 
 - specialization
-- profile strength
+- Top Rated status
+- 100% JSS
 - relevant portfolio
 - client's exact problem
-- competitive advantage
+- AI + Photoshop advantage
+- competition level
+- whether the job clearly matches the freelancer's positioning
 
 
 OPPORTUNITY SCORE:
 0-100
 
 This represents overall business value.
-
 
 Suggested weighting:
 
@@ -433,8 +628,15 @@ Budget Quality: 20%
 Competition: 15%
 Win Probability: 20%
 
+Use professional judgment.
 
-Use professional judgment when some information is missing.
+Do not blindly calculate a mathematical average if a major
+deal breaker exists.
+
+For example:
+
+An extremely poor budget may justify a SKIP even with
+excellent Skill Match.
 
 
 =====================================================
@@ -465,19 +667,104 @@ Be selective.
 
 The purpose is to avoid wasting time and Upwork Connects.
 
+A SKIP is a useful result.
+
 
 =====================================================
-JOB
+UPWORK JOB
 =====================================================
 
 JOB TITLE:
 
-{job_title}
+{clean_value(job_title)}
+
+
+JOB URL:
+
+{clean_value(job_url)}
 
 
 JOB DESCRIPTION:
 
 {job_description}
+
+
+=====================================================
+BUDGET & COMPETITION
+=====================================================
+
+BUDGET / RATE:
+
+{clean_value(budget)}
+
+
+PROPOSALS:
+
+{clean_value(proposals)}
+
+
+INTERVIEWING:
+
+{clean_value(interviewing)}
+
+
+INVITES SENT:
+
+{clean_value(invites)}
+
+
+UNANSWERED INVITES:
+
+{clean_value(unanswered_invites)}
+
+
+POSTED:
+
+{clean_value(posted)}
+
+
+PROJECT LENGTH:
+
+{clean_value(project_length)}
+
+
+=====================================================
+CLIENT
+=====================================================
+
+TOTAL SPENT:
+
+{clean_value(client_spent)}
+
+
+TOTAL HIRES:
+
+{clean_value(client_hires)}
+
+
+ACTIVE HIRES:
+
+{clean_value(client_active_hires)}
+
+
+CLIENT RATING:
+
+{clean_value(client_rating)}
+
+
+HOURS BILLED:
+
+{clean_value(client_hours)}
+
+
+CLIENT LOCATION:
+
+{clean_value(client_location)}
+
+
+MEMBER SINCE:
+
+{clean_value(client_member_since)}
 
 
 =====================================================
@@ -522,6 +809,9 @@ None or explain
 RECOMMENDED BID:
 Give a realistic pricing recommendation.
 
+If the client's stated budget is unrealistically low,
+say so clearly.
+
 Do not automatically compete at the bottom of the client's
 budget range.
 
@@ -539,9 +829,12 @@ PROPOSAL:
 Write a personalized Upwork proposal of approximately 100-140 words.
 
 
-PROPOSAL RULES:
+=====================================================
+PROPOSAL RULES
+=====================================================
 
 - Never start with "I am excited to apply"
+- Never start with generic freelancer language
 - Start with the client's actual problem
 - Sound human and confident
 - Be concise
@@ -549,7 +842,9 @@ PROPOSAL RULES:
 - Mention only relevant experience
 - Mention AI + Photoshop only when relevant
 - Focus on the result the client wants
-- Avoid generic freelancer language
+- Avoid long software lists
+- Avoid repeating the full job description
+- Avoid sounding like AI-generated text
 - End with a simple call to action
 """
 
@@ -562,7 +857,7 @@ PROPOSAL RULES:
 
                     result = response.output_text
 
-                    # Save current analysis in session
+                    # Save analysis to session
 
                     st.session_state["analysis"] = result
 
