@@ -1658,8 +1658,19 @@ def format_upwork_job(node):
                 ""
             ),
 
+        "ciphertext":
+            node.get(
+                "ciphertext",
+                ""
+            ),
+
         "url":
-            "",
+            (
+                "https://www.upwork.com/jobs/"
+                + str(node.get("ciphertext", ""))
+            )
+            if node.get("ciphertext")
+            else "",
 
         "budget":
             budget_info[
@@ -2350,6 +2361,14 @@ with tab1:
             "Upwork URL",
             key="job_url_input"
         )
+
+
+        if job_url:
+
+            st.link_button(
+                "🚀 Open this job on Upwork",
+                job_url
+            )
 
 
         job_description = st.text_area(
@@ -3655,6 +3674,19 @@ with tab2:
 
                         with r3:
 
+                            if job.get(
+                                "url"
+                            ):
+
+                                st.link_button(
+                                    "🚀 Open on Upwork",
+                                    job[
+                                        "url"
+                                    ],
+                                    use_container_width=True
+                                )
+
+
                             if st.button(
                                 "📄 Open Full Analysis",
                                 key=(
@@ -3686,6 +3718,52 @@ with tab2:
 
 
                                 st.rerun()
+
+
+                        # -----------------------------------------
+                        # READY-TO-USE APPLICATION MATERIAL
+                        # -----------------------------------------
+
+                        with st.expander(
+                            "✉️ Ready Proposal"
+                        ):
+
+                            proposal_text = (
+                                result.get(
+                                    "proposal"
+                                )
+                                or
+                                "Proposal was not generated."
+                            )
+
+                            st.write(
+                                proposal_text
+                            )
+
+
+                        with st.expander(
+                            "🤖 Why this job ranked here"
+                        ):
+
+                            analysis_text = (
+                                result.get(
+                                    "analysis"
+                                )
+                                or
+                                ""
+                            )
+
+                            if analysis_text:
+
+                                st.markdown(
+                                    analysis_text
+                                )
+
+                            else:
+
+                                st.write(
+                                    "Detailed AI analysis is unavailable."
+                                )
 
 
             # =================================================
@@ -4072,14 +4150,29 @@ with tab2:
                         )
 
 
-                        open_col1, open_col2 = (
+                        open_col1, open_col2, open_col3 = (
                             st.columns(
-                                [1, 3]
+                                [1, 1, 2]
                             )
                         )
 
 
                         with open_col1:
+
+                            if job.get(
+                                "url"
+                            ):
+
+                                st.link_button(
+                                    "🚀 Open on Upwork",
+                                    job[
+                                        "url"
+                                    ],
+                                    use_container_width=True
+                                )
+
+
+                        with open_col2:
 
                             if st.button(
                                 "📄 Open Full Analysis",
@@ -4113,7 +4206,7 @@ with tab2:
                                 st.rerun()
 
 
-                        with open_col2:
+                        with open_col3:
 
                             st.caption(
                                 "Full Analysis includes risks, "
