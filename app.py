@@ -335,8 +335,6 @@ def calculate_opportunity_score(
         + win_probability * 0.20
     )
 
-    # Very bad budget cannot become APPLY
-
     if budget_quality <= 15:
 
         score = min(
@@ -351,16 +349,12 @@ def calculate_opportunity_score(
             69
         )
 
-    # Serious deal breaker
-
     if deal_breaker:
 
         score = min(
             score,
             59
         )
-
-    # Very low win probability
 
     if win_probability < 35:
 
@@ -528,7 +522,6 @@ SKILL MATCH:
 Judge only how closely the job matches
 the freelancer's strongest skills.
 
-
 CLIENT QUALITY:
 0-100
 
@@ -542,7 +535,6 @@ Consider:
 - brief quality
 - repeat-work potential
 
-
 BUDGET QUALITY:
 0-100
 
@@ -554,7 +546,6 @@ Consider:
 - complexity
 - freelancer seniority
 
-
 COMPETITION SCORE:
 0-100
 
@@ -563,7 +554,6 @@ COMPETITION SCORE:
 
 Consider applicants, interviews, invites
 and job age when available.
-
 
 WIN PROBABILITY:
 0-100
@@ -581,7 +571,6 @@ Consider:
 - AI + Photoshop advantage
 - competition
 - pricing compatibility
-
 
 DEAL BREAKER:
 
@@ -840,34 +829,47 @@ def analyze_job_with_ai(job):
 
     return {
         "job": job,
-        "analysis": analysis,
+
+        "analysis":
+            analysis,
+
         "opportunity_score":
             opportunity_score,
+
         "decision":
             decision,
+
         "skill_match":
             skill_match,
+
         "client_quality":
             client_quality,
+
         "budget_quality":
             budget_quality,
+
         "competition_score":
             competition_score,
+
         "win_probability":
             win_probability,
+
         "deal_breaker":
             deal_breaker,
+
         "category":
             category,
+
         "recommended_bid":
             recommended_bid,
+
         "proposal":
             proposal
     }
 
 
 # =====================================================
-# SAVE ANALYSIS INTO SESSION
+# LOAD ANALYSIS INTO SESSION
 # =====================================================
 
 def load_analysis_into_session(
@@ -1306,8 +1308,6 @@ def parse_budget(node):
     )
 
 
-    # Hourly with range
-
     if (
         hourly_min
         and hourly_min > 0
@@ -1357,8 +1357,6 @@ def parse_budget(node):
         }
 
 
-    # Hourly without budget
-
     if hourly_type == "NOT_PROVIDED":
 
         return {
@@ -1378,8 +1376,6 @@ def parse_budget(node):
                 None
         }
 
-
-    # Fixed
 
     if (
         fixed_amount
@@ -1706,8 +1702,6 @@ def calculate_quick_fit(job):
     )
 
 
-    # Skill relevance — max 40
-
     matches = sum(
         1
         for keyword
@@ -1720,8 +1714,6 @@ def calculate_quick_fit(job):
         40
     )
 
-
-    # Budget — max 25
 
     if (
         job.get(
@@ -1803,8 +1795,6 @@ def calculate_quick_fit(job):
         score += 5
 
 
-    # Client
-
     spent = (
         job.get(
             "client_spent_number"
@@ -1849,8 +1839,6 @@ def calculate_quick_fit(job):
 
         score += 2
 
-
-    # Applicants
 
     applicants = (
         job.get(
@@ -1925,7 +1913,7 @@ def quick_fit_label(
 
 
 # =====================================================
-# PREFILL ANALYZER
+# PREFILL ANALYZER AFTER RERUN
 # =====================================================
 
 if st.session_state.get(
@@ -2013,6 +2001,25 @@ if st.session_state.get(
     st.session_state[
         "load_job_into_analyzer"
     ] = False
+
+
+# =====================================================
+# LOAD EXISTING AI RESULT AFTER RERUN
+# =====================================================
+
+if st.session_state.get(
+    "pending_analysis_result"
+):
+
+    pending_result = (
+        st.session_state.pop(
+            "pending_analysis_result"
+        )
+    )
+
+    load_analysis_into_session(
+        pending_result
+    )
 
 
 # =====================================================
@@ -2312,7 +2319,7 @@ with tab1:
 
 
     # =================================================
-    # MANUAL ANALYZE BUTTON
+    # MANUAL ANALYZE
     # =================================================
 
     if st.button(
@@ -2808,8 +2815,6 @@ with tab2:
                         ] = total_count
 
 
-                        # Remove old AI ranking
-
                         st.session_state.pop(
                             "top_job_analyses",
                             None
@@ -2905,6 +2910,7 @@ with tab2:
                     <
                     minimum_quick_fit
                 ):
+
                     continue
 
 
@@ -2929,6 +2935,7 @@ with tab2:
                             and
                             max_rate < 25
                         ):
+
                             continue
 
 
@@ -2959,9 +2966,11 @@ with tab2:
                                     max_applicants
                                 )
                             ):
+
                                 continue
 
                         except Exception:
+
                             pass
 
 
@@ -3324,110 +3333,30 @@ with tab2:
                                 use_container_width=True
                             ):
 
-                                selected_job = job
-
                                 st.session_state[
                                     "selected_job"
-                                ] = selected_job
+                                ] = job
 
+                                st.session_state[
+                                    "load_job_into_analyzer"
+                                ] = True
 
-                                mappings = {
-                                    "job_title_input":
-                                        "title",
-
-                                    "job_url_input":
-                                        "url",
-
-                                    "job_description_input":
-                                        "description",
-
-                                    "budget_input":
-                                        "budget",
-
-                                    "proposals_input":
-                                        "proposals",
-
-                                    "interviewing_input":
-                                        "interviewing",
-
-                                    "invites_input":
-                                        "invites",
-
-                                    "unanswered_invites_input":
-                                        "unanswered_invites",
-
-                                    "posted_input":
-                                        "posted",
-
-                                    "client_spent_input":
-                                        "client_spent",
-
-                                    "client_hires_input":
-                                        "client_hires",
-
-                                    "client_rating_input":
-                                        "client_rating",
-
-                                    "client_location_input":
-                                        "client_location",
-
-                                    "active_hires_input":
-                                        "active_hires",
-
-                                    "hours_billed_input":
-                                        "hours_billed",
-
-                                    "member_since_input":
-                                        "member_since",
-
-                                    "project_length_input":
-                                        "project_length"
-                                }
-
-
-                                for (
-                                    session_key,
-                                    job_key
-                                ) in mappings.items():
-
-                                    value = (
-                                        selected_job.get(
-                                            job_key,
-                                            ""
-                                        )
-                                    )
-
-                                    if value is None:
-                                        value = ""
-
-                                    st.session_state[
-                                        session_key
-                                    ] = str(
-                                        value
-                                    )
-
-
-                                load_analysis_into_session(
-                                    result
-                                )
-
+                                st.session_state[
+                                    "pending_analysis_result"
+                                ] = result
 
                                 st.session_state[
                                     "selected_job_loaded_message"
                                 ] = True
 
-
-                                st.success(
-                                    "Loaded. Open the "
-                                    "🎯 Analyze Job tab."
-                                )
+                                st.rerun()
 
 
                 st.divider()
 
 
             # =================================================
-            # QUICK FIT JOB LIST
+            # QUICK FIT RESULTS
             # =================================================
 
             st.markdown(
