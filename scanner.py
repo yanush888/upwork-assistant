@@ -61,6 +61,194 @@ STRONG_KEYWORDS = [
     "lightroom",
 ]
 
+
+# =====================================================
+# RELEVANCE FILTER
+# =====================================================
+
+RELEVANCE_KEYWORDS = [
+    "amazon listing",
+    "amazon product",
+    "amazon images",
+    "amazon image",
+    "a+ content",
+    "e-commerce",
+    "ecommerce",
+    "product image",
+    "product images",
+    "product photo",
+    "product photos",
+    "product photography",
+    "product retouch",
+    "product retouching",
+    "product editing",
+    "listing image",
+    "listing images",
+    "lifestyle image",
+    "lifestyle images",
+    "packshot",
+    "pack shot",
+    "photo retouch",
+    "photo retouching",
+    "high-end retouch",
+    "high end retouch",
+    "photo editing",
+    "image editing",
+    "photoshop",
+    "compositing",
+    "composite",
+    "background replacement",
+    "background removal",
+    "image manipulation",
+    "photo manipulation",
+    "lightroom",
+    "ai image",
+    "ai images",
+    "ai photography",
+    "ai product photography",
+    "generative ai",
+    "ai + photoshop",
+    "ai photoshop",
+    "photorealistic ai",
+    "architectural photo",
+    "architectural photography",
+    "architectural retouch",
+    "architecture retouch",
+    "interior photo",
+    "interior photography",
+    "interior retouch",
+    "real estate photo",
+    "real estate photography",
+    "real estate editing",
+    "virtual staging",
+    "portrait retouch",
+    "portrait retouching",
+    "beauty retouch",
+    "beauty retouching",
+    "skin retouch",
+]
+
+GENERIC_VISUAL_KEYWORDS = [
+    "retouch",
+    "retouching",
+    "photoshop",
+    "photo editor",
+    "photo editing",
+    "image editor",
+    "image editing",
+    "photographer",
+    "photography",
+    "compositing",
+    "lightroom",
+]
+
+NEGATIVE_KEYWORDS = [
+    "web developer",
+    "web development",
+    "shopify developer",
+    "wordpress developer",
+    "frontend developer",
+    "front-end developer",
+    "backend developer",
+    "back-end developer",
+    "full stack developer",
+    "full-stack developer",
+    "ui/ux",
+    "ux/ui",
+    "ui designer",
+    "ux designer",
+    "logo design",
+    "logo designer",
+    "brand identity",
+    "branding designer",
+    "illustrator",
+    "illustration",
+    "social media manager",
+    "social media marketing",
+    "meta ads",
+    "facebook ads",
+    "google ads",
+    "seo",
+    "email marketing",
+    "copywriter",
+    "copywriting",
+    "content writer",
+    "video editor",
+    "video editing",
+    "motion graphics",
+    "animation",
+    "3d developer",
+    "software developer",
+    "mobile app developer",
+]
+
+RELEVANCE_MIN_SCORE = int(
+    os.getenv("RELEVANCE_MIN_SCORE", "3")
+)
+
+
+def job_search_text(job):
+    return (
+        (
+            str(job.get("title") or "")
+            + " "
+            + str(job.get("description") or "")
+            + " "
+            + " ".join(job.get("skills") or [])
+        )
+        .lower()
+    )
+
+
+def relevance_score(job):
+    text = job_search_text(job)
+
+    strong_matches = [
+        keyword
+        for keyword in RELEVANCE_KEYWORDS
+        if keyword in text
+    ]
+
+    generic_matches = [
+        keyword
+        for keyword in GENERIC_VISUAL_KEYWORDS
+        if keyword in text
+    ]
+
+    negative_matches = [
+        keyword
+        for keyword in NEGATIVE_KEYWORDS
+        if keyword in text
+    ]
+
+    score = 0
+    score += min(len(strong_matches) * 3, 15)
+    score += min(len(generic_matches), 3)
+
+    if negative_matches and not strong_matches:
+        score -= 8
+
+    if not strong_matches and any(
+        bad in text
+        for bad in [
+            "developer",
+            "development",
+            "seo",
+            "marketing",
+            "ads",
+            "copywriter",
+            "copywriting",
+        ]
+    ):
+        score -= 4
+
+    return score
+
+
+def is_relevant_job(job):
+    return relevance_score(job) >= RELEVANCE_MIN_SCORE
+
+
 UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql"
 
@@ -1141,10 +1329,19 @@ def smart_search_upwork_jobs(
             )
 
     jobs = []
+    filtered_out = 0
 
     for node in unique_nodes.values():
 
         job = format_upwork_job(node)
+
+        job["relevance_score"] = relevance_score(
+            job
+        )
+
+        if not is_relevant_job(job):
+            filtered_out += 1
+            continue
 
         job["quick_fit"] = calculate_quick_fit(
             job
@@ -1154,8 +1351,16 @@ def smart_search_upwork_jobs(
 
     jobs = sorted(
         jobs,
-        key=lambda x: x.get("quick_fit", 0),
+        key=lambda x: (
+            x.get("quick_fit", 0),
+            x.get("relevance_score", 0)
+        ),
         reverse=True
+    )
+
+    print(
+        f"Relevance filter: kept {len(jobs)} jobs; "
+        f"removed {filtered_out} unrelated jobs."
     )
 
     return jobs, errors
@@ -1927,7 +2132,7 @@ def main():
             print(" -", err)
 
     candidates = jobs[:AI_ANALYZE_TOP]
-    print(f"Found {len(jobs)} unique jobs; analyzing top {len(candidates)}.")
+    print(f"Found {len(jobs)} relevant unique jobs; analyzing top {len(candidates)}.")
 
     strong = []
     for i, job in enumerate(candidates, start=1):
