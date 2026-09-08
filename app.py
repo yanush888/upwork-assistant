@@ -251,6 +251,180 @@ def job_state_key(
     )
 
 
+def save_or_update_job_status(
+    job,
+    new_status,
+    result=None
+):
+
+    job_url = (
+        job.get("url")
+        or ""
+    )
+
+    job_title = (
+        job.get("title")
+        or "Untitled job"
+    )
+
+    payload = {
+        "job_title": job_title,
+        "job_url": job_url,
+        "job_description": (
+            job.get("description")
+            or ""
+        ),
+        "status": new_status
+    }
+
+    if result:
+
+        payload.update({
+            "opportunity_score": result.get(
+                "opportunity_score"
+            ),
+            "skill_match": result.get(
+                "skill_match"
+            ),
+            "client_quality": result.get(
+                "client_quality"
+            ),
+            "budget_quality": result.get(
+                "budget_quality"
+            ),
+            "competition_score": result.get(
+                "competition_score"
+            ),
+            "win_probability": result.get(
+                "win_probability"
+            ),
+            "decision": result.get(
+                "decision"
+            ),
+            "category": result.get(
+                "category"
+            ),
+            "proposal": result.get(
+                "proposal"
+            )
+        })
+
+    existing = None
+
+    if job_url:
+
+        response = (
+            supabase
+            .table("jobs")
+            .select("id")
+            .eq("job_url", job_url)
+            .limit(1)
+            .execute()
+        )
+
+        rows = response.data or []
+
+        if rows:
+            existing = rows[0]
+
+    if existing:
+
+        (
+            supabase
+            .table("jobs")
+            .update(payload)
+            .eq("id", existing["id"])
+            .execute()
+        )
+
+    else:
+
+        payload["contract_value"] = 0
+
+        (
+            supabase
+            .table("jobs")
+            .insert(payload)
+            .execute()
+        )
+
+    return new_status
+
+
+def render_quick_status_buttons(
+    job,
+    result=None,
+    key_prefix="job"
+):
+
+    status_key = (
+        "job_status_"
+        + str(
+            job_state_key(job)
+        )
+    )
+
+    current_status = st.session_state.get(
+        status_key,
+        "Not applied"
+    )
+
+    st.caption(
+        f"Status: {current_status}"
+    )
+
+    s1, s2, s3 = st.columns(3)
+
+    actions = [
+        (s1, "✅ Applied", "Applied", "applied"),
+        (s2, "💬 Interview", "Interview", "interview"),
+        (s3, "🏆 Hired", "Hired", "hired")
+    ]
+
+    for column, label, status_value, suffix in actions:
+
+        with column:
+
+            if st.button(
+                label,
+                key=(
+                    f"{key_prefix}_{suffix}_"
+                    f"{job_state_key(job)}"
+                ),
+                use_container_width=True
+            ):
+
+                try:
+
+                    saved_status = (
+                        save_or_update_job_status(
+                            job,
+                            status_value,
+                            result
+                        )
+                    )
+
+                    st.session_state[
+                        status_key
+                    ] = saved_status
+
+                    st.success(
+                        f"✅ Status changed to {saved_status}"
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        "Could not update job status."
+                    )
+
+                    st.code(
+                        str(e)
+                    )
+
+
 # =====================================================
 # MONEY HELPERS
 # =====================================================
@@ -3764,6 +3938,17 @@ with tab2:
                                 )
 
 
+                        st.markdown(
+                            "#### 📌 Application Status"
+                        )
+
+                        render_quick_status_buttons(
+                            job,
+                            result=result,
+                            key_prefix=f"top_{rank}"
+                        )
+
+
                         if st.session_state.get(
                             top_full_key,
                             False
@@ -4270,6 +4455,17 @@ with tab2:
                                 "portfolio recommendations, "
                                 "application strategy and proposal."
                             )
+
+
+                        st.markdown(
+                            "#### 📌 Application Status"
+                        )
+
+                        render_quick_status_buttons(
+                            job,
+                            result=current_result,
+                            key_prefix=f"single_{current_key}"
+                        )
 
 
                         if st.session_state.get(
