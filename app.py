@@ -64,6 +64,18 @@ supabase = create_client(
     st.secrets["SUPABASE_KEY"]
 )
 
+# Service-role client is used only for server-side OAuth token storage.
+# Never print this key or expose it to the browser.
+supabase_service_key = st.secrets.get(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    st.secrets["SUPABASE_KEY"]
+)
+
+secure_supabase = create_client(
+    st.secrets["SUPABASE_URL"],
+    supabase_service_key
+)
+
 
 # =====================================================
 # UPWORK SETTINGS
@@ -1254,6 +1266,113 @@ def load_analysis_into_session(
 
 
 # =====================================================
+# PERSISTENT UPWORK TOKENS
+# =====================================================
+
+def load_persisted_upwork_tokens():
+
+    try:
+        response = (
+            secure_supabase
+            .table("app_tokens")
+            .select("access_token,refresh_token")
+            .eq("id", "upwork")
+            .limit(1)
+            .execute()
+        )
+
+        rows = response.data or []
+
+        if not rows:
+            return
+
+        row = rows[0]
+
+        if row.get("access_token"):
+            st.session_state["UPWORK_ACCESS_TOKEN"] = row["access_token"]
+
+        if row.get("refresh_token"):
+            st.session_state["UPWORK_REFRESH_TOKEN"] = row["refresh_token"]
+
+    except Exception:
+        # The UI can still work with session-only OAuth if the table
+        # has not been created yet.
+        pass
+
+
+def persist_upwork_tokens(access_token, refresh_token):
+
+    if not access_token or not refresh_token:
+        return
+
+    (
+        secure_supabase
+        .table("app_tokens")
+        .upsert({
+            "id": "upwork",
+            "access_token": access_token,
+            "refresh_token": refresh_token
+        })
+        .execute()
+    )
+
+
+def delete_persisted_upwork_tokens():
+
+    (
+        secure_supabase
+        .table("app_tokens")
+        .delete()
+        .eq("id", "upwork")
+        .execute()
+    )
+
+
+def refresh_upwork_tokens():
+
+    refresh_token = st.session_state.get("UPWORK_REFRESH_TOKEN")
+
+    if not refresh_token:
+        raise Exception("No Upwork refresh token is available.")
+
+    response = requests.post(
+        UPWORK_TOKEN_URL,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        data={
+            "grant_type": "refresh_token",
+            "client_id": upwork_client_id,
+            "client_secret": upwork_client_secret,
+            "refresh_token": refresh_token
+        },
+        timeout=30
+    )
+
+    response.raise_for_status()
+    token_data = response.json()
+
+    access_token = token_data.get("access_token")
+    new_refresh_token = token_data.get("refresh_token") or refresh_token
+
+    if not access_token:
+        raise Exception("Upwork refresh response did not contain an access token.")
+
+    st.session_state["UPWORK_ACCESS_TOKEN"] = access_token
+    st.session_state["UPWORK_REFRESH_TOKEN"] = new_refresh_token
+
+    persist_upwork_tokens(access_token, new_refresh_token)
+
+    return access_token
+
+
+# Restore OAuth credentials for a new Streamlit session.
+if upwork_api_enabled and "UPWORK_ACCESS_TOKEN" not in st.session_state:
+    load_persisted_upwork_tokens()
+
+
+# =====================================================
 # UPWORK OAUTH
 # =====================================================
 
@@ -1353,6 +1472,11 @@ if upwork_api_enabled:
                 "refresh_token"
             )
 
+            persist_upwork_tokens(
+                st.session_state.get("UPWORK_ACCESS_TOKEN"),
+                st.session_state.get("UPWORK_REFRESH_TOKEN")
+            )
+
             st.query_params.clear()
 
             st.rerun()
@@ -1390,25 +1514,25 @@ def upwork_graphql(
         )
 
 
-    response = requests.post(
-        UPWORK_GRAPHQL_URL,
-        headers={
-            "Authorization":
-                f"Bearer {token}",
+    def _send(current_token):
+        return requests.post(
+            UPWORK_GRAPHQL_URL,
+            headers={
+                "Authorization": f"Bearer {current_token}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "query": query,
+                "variables": variables or {}
+            },
+            timeout=30
+        )
 
-            "Content-Type":
-                "application/json"
-        },
-        json={
-            "query":
-                query,
+    response = _send(token)
 
-            "variables":
-                variables or {}
-        },
-        timeout=30
-    )
-
+    if response.status_code == 401:
+        token = refresh_upwork_tokens()
+        response = _send(token)
 
     response.raise_for_status()
 
@@ -2480,6 +2604,12 @@ with st.sidebar:
                 "UPWORK_REFRESH_TOKEN",
                 None
             )
+
+            try:
+                delete_persisted_upwork_tokens()
+            except Exception as e:
+                st.warning("Session disconnected, but stored OAuth token could not be removed.")
+                st.caption(str(e))
 
             st.rerun()
 
