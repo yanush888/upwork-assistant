@@ -182,8 +182,24 @@ NEGATIVE_KEYWORDS = [
     "mobile app developer",
 ]
 
+HARD_NEGATIVE_TITLE_KEYWORDS = [
+    "web designer", "web developer", "shopify designer", "shopify developer",
+    "graphic designer", "visual content creator", "illustrator", "ui/ux", "ux/ui",
+    "social media", "meta ads", "facebook ads", "google ads", "video editor",
+    "motion designer", "motion graphics",
+]
+
+CORE_PHOTO_SIGNALS = [
+    "retouch", "retouching", "photo retouch", "photo editing", "photo editor",
+    "product photo", "product image", "product retouch", "amazon listing",
+    "amazon product", "listing image", "lifestyle image", "photoshop compositing",
+    "photo compositing", "image compositing", "background replacement",
+    "ai image", "ai photography", "architectural photo", "interior photo",
+    "real estate photo", "portrait retouch", "beauty retouch",
+]
+
 RELEVANCE_MIN_SCORE = int(
-    os.getenv("RELEVANCE_MIN_SCORE", "3")
+    os.getenv("RELEVANCE_MIN_SCORE", "5")
 )
 
 
@@ -202,50 +218,37 @@ def job_search_text(job):
 
 def relevance_score(job):
     text = job_search_text(job)
+    title = str(job.get("title") or "").lower()
+    strong_matches = [k for k in RELEVANCE_KEYWORDS if k in text]
+    generic_matches = [k for k in GENERIC_VISUAL_KEYWORDS if k in text]
+    negative_matches = [k for k in NEGATIVE_KEYWORDS if k in text]
+    core_matches = [k for k in CORE_PHOTO_SIGNALS if k in text]
+    hard_title_matches = [k for k in HARD_NEGATIVE_TITLE_KEYWORDS if k in title]
 
-    strong_matches = [
-        keyword
-        for keyword in RELEVANCE_KEYWORDS
-        if keyword in text
-    ]
-
-    generic_matches = [
-        keyword
-        for keyword in GENERIC_VISUAL_KEYWORDS
-        if keyword in text
-    ]
-
-    negative_matches = [
-        keyword
-        for keyword in NEGATIVE_KEYWORDS
-        if keyword in text
-    ]
-
-    score = 0
-    score += min(len(strong_matches) * 3, 15)
-    score += min(len(generic_matches), 3)
-
-    if negative_matches and not strong_matches:
+    score = min(len(strong_matches) * 3, 15) + min(len(generic_matches), 3)
+    if core_matches:
+        score += 4
+    if hard_title_matches:
+        score -= 12
+        if core_matches:
+            score += 7
+    if negative_matches and not core_matches:
         score -= 8
-
-    if not strong_matches and any(
-        bad in text
-        for bad in [
-            "developer",
-            "development",
-            "seo",
-            "marketing",
-            "ads",
-            "copywriter",
-            "copywriting",
-        ]
-    ):
-        score -= 4
-
+    if not core_matches and any(k in text for k in [
+        "developer", "development", "seo", "marketing", "ads",
+        "copywriter", "copywriting", "branding", "brand identity"
+    ]):
+        score -= 5
     return score
 
 
 def is_relevant_job(job):
+    text = job_search_text(job)
+    title = str(job.get("title") or "").lower()
+    core_matches = [k for k in CORE_PHOTO_SIGNALS if k in text]
+    hard_title_matches = [k for k in HARD_NEGATIVE_TITLE_KEYWORDS if k in title]
+    if hard_title_matches and not core_matches:
+        return False
     return relevance_score(job) >= RELEVANCE_MIN_SCORE
 
 
