@@ -16,9 +16,20 @@ st.set_page_config(
     layout="wide"
 )
 
-# Your preferred sustainable rate.
-# Later we can make this editable in Settings.
 TARGET_HOURLY_RATE = 35
+
+UPWORK_AUTH_URL = (
+    "https://www.upwork.com/"
+    "ab/account-security/oauth2/authorize"
+)
+
+UPWORK_TOKEN_URL = (
+    "https://www.upwork.com/api/v3/oauth2/token"
+)
+
+UPWORK_GRAPHQL_URL = (
+    "https://api.upwork.com/graphql"
+)
 
 
 # =====================================================
@@ -36,21 +47,8 @@ supabase = create_client(
 
 
 # =====================================================
-# UPWORK API SETTINGS
+# UPWORK SETTINGS
 # =====================================================
-
-UPWORK_AUTH_URL = (
-    "https://www.upwork.com/"
-    "ab/account-security/oauth2/authorize"
-)
-
-UPWORK_TOKEN_URL = (
-    "https://www.upwork.com/api/v3/oauth2/token"
-)
-
-UPWORK_GRAPHQL_URL = (
-    "https://api.upwork.com/graphql"
-)
 
 upwork_api_enabled = st.secrets.get(
     "UPWORK_API_ENABLED",
@@ -74,7 +72,7 @@ upwork_redirect_uri = st.secrets.get(
 
 
 # =====================================================
-# HELPER FUNCTIONS
+# GENERAL HELPERS
 # =====================================================
 
 def clean_value(value):
@@ -181,8 +179,33 @@ def safe_score(
     )
 
 
+def money_display(money):
+
+    if not money:
+        return ""
+
+    display_value = money.get(
+        "displayValue"
+    )
+
+    currency = money.get(
+        "currency"
+    )
+
+    if display_value:
+
+        if currency:
+            return f"{display_value} {currency}"
+
+        return str(
+            display_value
+        )
+
+    return ""
+
+
 # =====================================================
-# FINAL OPPORTUNITY SCORE
+# SCORING
 # =====================================================
 
 def calculate_opportunity_score(
@@ -227,36 +250,33 @@ def calculate_opportunity_score(
         + win_probability * 0.20
     )
 
-    score = round(score)
+    score = round(
+        score
+    )
 
-    # ---------------------------------------------
-    # BUSINESS SAFETY CAPS
-    # ---------------------------------------------
-
-    # Terrible budget should never become APPLY.
     if budget_quality <= 15:
+
         score = min(
             score,
             59
         )
 
-    # Weak budget should not easily become strong APPLY.
     elif budget_quality <= 30:
+
         score = min(
             score,
             69
         )
 
-    # Major deal breaker = SKIP.
     if deal_breaker:
+
         score = min(
             score,
             59
         )
 
-    # Very low probability of winning
-    # should stop a job becoming APPLY.
     if win_probability < 35:
+
         score = min(
             score,
             64
@@ -265,9 +285,7 @@ def calculate_opportunity_score(
     return score
 
 
-def decision_from_score(
-    score
-):
+def decision_from_score(score):
 
     if score >= 90:
         return "🔥 APPLY NOW"
@@ -282,7 +300,518 @@ def decision_from_score(
 
 
 # =====================================================
-# PREFILL FROM FIND JOBS
+# UPWORK OAUTH
+# =====================================================
+
+def build_upwork_auth_url():
+
+    params = {
+        "response_type":
+            "code",
+
+        "client_id":
+            upwork_client_id,
+
+        "redirect_uri":
+            upwork_redirect_uri
+    }
+
+    return (
+        UPWORK_AUTH_URL
+        + "?"
+        + urlencode(params)
+    )
+
+
+def exchange_upwork_code(code):
+
+    response = requests.post(
+        UPWORK_TOKEN_URL,
+        headers={
+            "Accept":
+                "application/json",
+
+            "Content-Type":
+                "application/x-www-form-urlencoded"
+        },
+        data={
+            "grant_type":
+                "authorization_code",
+
+            "client_id":
+                upwork_client_id,
+
+            "client_secret":
+                upwork_client_secret,
+
+            "code":
+                code,
+
+            "redirect_uri":
+                upwork_redirect_uri
+        },
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# =====================================================
+# HANDLE OAUTH CALLBACK
+# =====================================================
+
+if upwork_api_enabled:
+
+    oauth_code = st.query_params.get(
+        "code"
+    )
+
+    if (
+        oauth_code
+        and
+        "UPWORK_ACCESS_TOKEN"
+        not in st.session_state
+    ):
+
+        try:
+
+            token_data = exchange_upwork_code(
+                oauth_code
+            )
+
+            st.session_state[
+                "UPWORK_ACCESS_TOKEN"
+            ] = token_data.get(
+                "access_token"
+            )
+
+            st.session_state[
+                "UPWORK_REFRESH_TOKEN"
+            ] = token_data.get(
+                "refresh_token"
+            )
+
+            st.query_params.clear()
+
+            st.rerun()
+
+        except Exception as e:
+
+            st.error(
+                "Upwork authorization failed."
+            )
+
+            st.code(
+                str(e)
+            )
+
+
+# =====================================================
+# UPWORK GRAPHQL
+# =====================================================
+
+def upwork_graphql(
+    query,
+    variables=None
+):
+
+    token = st.session_state.get(
+        "UPWORK_ACCESS_TOKEN"
+    )
+
+    if not token:
+
+        raise Exception(
+            "Upwork is not connected."
+        )
+
+    response = requests.post(
+        UPWORK_GRAPHQL_URL,
+        headers={
+            "Authorization":
+                f"Bearer {token}",
+
+            "Content-Type":
+                "application/json"
+        },
+        json={
+            "query":
+                query,
+
+            "variables":
+                variables or {}
+        },
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    payload = response.json()
+
+    if payload.get(
+        "errors"
+    ):
+
+        raise Exception(
+            str(
+                payload["errors"]
+            )
+        )
+
+    return payload.get(
+        "data",
+        {}
+    )
+
+
+def search_upwork_jobs(
+    search_expression,
+    first=10
+):
+
+    query = """
+    query SearchJobs(
+        $filter: MarketplaceJobPostingsSearchFilter
+    ) {
+        marketplaceJobPostingsSearch(
+            marketPlaceJobFilter: $filter
+            searchType: USER_JOBS_SEARCH
+            sortAttributes: [
+                { field: RECENCY }
+            ]
+        ) {
+            totalCount
+
+            edges {
+                node {
+                    id
+                    title
+                    description
+                    ciphertext
+
+                    amount {
+                        displayValue
+                        currency
+                    }
+
+                    hourlyBudgetMin {
+                        displayValue
+                        currency
+                    }
+
+                    hourlyBudgetMax {
+                        displayValue
+                        currency
+                    }
+
+                    durationLabel
+                    engagement
+                    experienceLevel
+
+                    totalApplicants
+                    applied
+
+                    createdDateTime
+                    publishedDateTime
+
+                    skills {
+                        name
+                        prettyName
+                    }
+
+                    client {
+                        totalHires
+                        totalPostedJobs
+
+                        totalSpent {
+                            displayValue
+                            currency
+                        }
+
+                        totalReviews
+                        totalFeedback
+                        memberSinceDateTime
+                        hasFinancialPrivacy
+
+                        location {
+                            city
+                            country
+                            timezone
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """
+
+    variables = {
+        "filter": {
+            "searchExpression_eq":
+                search_expression,
+
+            "pagination_eq": {
+                "after":
+                    "0",
+
+                "first":
+                    first
+            }
+        }
+    }
+
+    data = upwork_graphql(
+        query,
+        variables
+    )
+
+    results = (
+        data
+        .get(
+            "marketplaceJobPostingsSearch",
+            {}
+        )
+    )
+
+    return (
+        results.get(
+            "totalCount",
+            0
+        ),
+        results.get(
+            "edges",
+            []
+        )
+    )
+
+
+# =====================================================
+# FORMAT LIVE UPWORK JOB
+# =====================================================
+
+def format_upwork_job(node):
+
+    client = (
+        node.get(
+            "client"
+        )
+        or {}
+    )
+
+    location = (
+        client.get(
+            "location"
+        )
+        or {}
+    )
+
+    hourly_min = money_display(
+        node.get(
+            "hourlyBudgetMin"
+        )
+    )
+
+    hourly_max = money_display(
+        node.get(
+            "hourlyBudgetMax"
+        )
+    )
+
+    fixed_amount = money_display(
+        node.get(
+            "amount"
+        )
+    )
+
+
+    # ---------------------------------------------
+    # BUDGET
+    # ---------------------------------------------
+
+    if hourly_min or hourly_max:
+
+        if hourly_min and hourly_max:
+
+            budget = (
+                f"{hourly_min} - "
+                f"{hourly_max} / hr"
+            )
+
+        elif hourly_max:
+
+            budget = (
+                f"Up to {hourly_max} / hr"
+            )
+
+        else:
+
+            budget = (
+                f"{hourly_min} / hr"
+            )
+
+    else:
+
+        budget = fixed_amount
+
+
+    # ---------------------------------------------
+    # LOCATION
+    # ---------------------------------------------
+
+    location_parts = [
+        location.get(
+            "city"
+        ),
+        location.get(
+            "country"
+        )
+    ]
+
+    location_text = ", ".join([
+        part
+        for part in location_parts
+        if part
+    ])
+
+
+    # ---------------------------------------------
+    # SKILLS
+    # ---------------------------------------------
+
+    skills = []
+
+    for skill in (
+        node.get(
+            "skills"
+        )
+        or []
+    ):
+
+        skill_name = (
+            skill.get(
+                "prettyName"
+            )
+            or
+            skill.get(
+                "name"
+            )
+        )
+
+        if skill_name:
+
+            skills.append(
+                skill_name
+            )
+
+
+    return {
+
+        "id":
+            node.get(
+                "id",
+                ""
+            ),
+
+        "title":
+            node.get(
+                "title",
+                ""
+            ),
+
+        "description":
+            node.get(
+                "description",
+                ""
+            ),
+
+        "url":
+            "",
+
+        "budget":
+            budget,
+
+        "proposals":
+            str(
+                node.get(
+                    "totalApplicants",
+                    ""
+                )
+            ),
+
+        "interviewing":
+            "",
+
+        "invites":
+            "",
+
+        "unanswered_invites":
+            "",
+
+        "posted":
+            node.get(
+                "publishedDateTime",
+                ""
+            ),
+
+        "project_length":
+            node.get(
+                "durationLabel",
+                ""
+            ),
+
+        "client_spent":
+            money_display(
+                client.get(
+                    "totalSpent"
+                )
+            ),
+
+        "client_hires":
+            str(
+                client.get(
+                    "totalHires",
+                    ""
+                )
+            ),
+
+        "client_rating":
+            str(
+                client.get(
+                    "totalFeedback",
+                    ""
+                )
+            ),
+
+        "client_location":
+            location_text,
+
+        "active_hires":
+            "",
+
+        "hours_billed":
+            "",
+
+        "member_since":
+            client.get(
+                "memberSinceDateTime",
+                ""
+            ),
+
+        "skills":
+            skills,
+
+        "experience_level":
+            node.get(
+                "experienceLevel",
+                ""
+            )
+    }
+
+
+# =====================================================
+# PREFILL ANALYZER
 # =====================================================
 
 if st.session_state.get(
@@ -365,119 +894,6 @@ if st.session_state.get(
 
 
 # =====================================================
-# UPWORK OAUTH
-# =====================================================
-
-def build_upwork_auth_url():
-
-    params = {
-        "response_type":
-            "code",
-
-        "client_id":
-            upwork_client_id,
-
-        "redirect_uri":
-            upwork_redirect_uri
-    }
-
-    return (
-        UPWORK_AUTH_URL
-        + "?"
-        + urlencode(params)
-    )
-
-
-def exchange_upwork_code(
-    code
-):
-
-    response = requests.post(
-        UPWORK_TOKEN_URL,
-        headers={
-            "Accept":
-                "application/json",
-
-            "Content-Type":
-                "application/x-www-form-urlencoded"
-        },
-        data={
-            "grant_type":
-                "authorization_code",
-
-            "client_id":
-                upwork_client_id,
-
-            "client_secret":
-                upwork_client_secret,
-
-            "code":
-                code,
-
-            "redirect_uri":
-                upwork_redirect_uri
-        },
-        timeout=30
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-# =====================================================
-# HANDLE OAUTH CALLBACK
-# =====================================================
-
-if upwork_api_enabled:
-
-    oauth_code = st.query_params.get(
-        "code"
-    )
-
-    if (
-        oauth_code
-        and
-        "UPWORK_ACCESS_TOKEN"
-        not in st.session_state
-    ):
-
-        try:
-
-            token_data = (
-                exchange_upwork_code(
-                    oauth_code
-                )
-            )
-
-            st.session_state[
-                "UPWORK_ACCESS_TOKEN"
-            ] = token_data.get(
-                "access_token"
-            )
-
-            st.session_state[
-                "UPWORK_REFRESH_TOKEN"
-            ] = token_data.get(
-                "refresh_token"
-            )
-
-            st.query_params.clear()
-
-            st.rerun()
-
-        except Exception as e:
-
-            st.error(
-                "Upwork authorization failed."
-            )
-
-            st.code(
-                str(e)
-            )
-
-
-# =====================================================
 # HEADER
 # =====================================================
 
@@ -503,21 +919,7 @@ with st.sidebar:
     if not upwork_api_enabled:
 
         st.warning(
-            "⏳ Waiting for Upwork API approval"
-        )
-
-        st.caption(
-            "Manual job analysis remains available."
-        )
-
-    elif not all([
-        upwork_client_id,
-        upwork_client_secret,
-        upwork_redirect_uri
-    ]):
-
-        st.error(
-            "⚠️ Upwork API credentials are missing"
+            "API disabled"
         )
 
     elif st.session_state.get(
@@ -569,12 +971,6 @@ with st.sidebar:
         f"${TARGET_HOURLY_RATE}/hr"
     )
 
-    st.caption(
-        "Hourly jobs are evaluated primarily "
-        "by whether your target rate fits inside "
-        "the client's range."
-    )
-
 
     st.divider()
 
@@ -583,8 +979,8 @@ with st.sidebar:
     )
 
     st.write("""
-    1. Find Upwork jobs
-    2. Filter strong opportunities
+    1. Search live Upwork jobs
+    2. Open a promising job
     3. Analyze opportunity
     4. Decide APPLY or SKIP
     5. Generate proposal
@@ -605,7 +1001,7 @@ tab1, tab2, tab3 = st.tabs([
 
 
 # =====================================================
-# TAB 1 — ANALYZE JOB
+# TAB 1 — ANALYZE
 # =====================================================
 
 with tab1:
@@ -633,41 +1029,24 @@ with tab1:
     )
 
 
-    # =================================================
-    # JOB
-    # =================================================
-
     with col1:
 
         job_title = st.text_input(
             "Job title",
-            placeholder=(
-                "Example: Amazon Product Image Retoucher"
-            ),
             key="job_title_input"
         )
 
         job_url = st.text_input(
-            "Upwork URL (optional)",
-            placeholder=(
-                "https://www.upwork.com/jobs/..."
-            ),
+            "Upwork URL",
             key="job_url_input"
         )
 
         job_description = st.text_area(
             "Job description",
             height=420,
-            placeholder=(
-                "Paste the full Upwork job description here..."
-            ),
             key="job_description_input"
         )
 
-
-    # =================================================
-    # BUDGET & COMPETITION
-    # =================================================
 
     with col2:
 
@@ -677,48 +1056,34 @@ with tab1:
 
         budget = st.text_input(
             "Budget / Hourly Rate",
-            placeholder=(
-                "Example: $300 fixed or $25-$50/hr"
-            ),
             key="budget_input"
         )
 
         proposals = st.text_input(
-            "Proposals",
-            placeholder="Example: 10 to 15",
+            "Proposals / Applicants",
             key="proposals_input"
         )
 
         interviewing = st.text_input(
             "Interviewing",
-            placeholder="Example: 2",
             key="interviewing_input"
         )
 
         invites = st.text_input(
             "Invites sent",
-            placeholder="Example: 5",
             key="invites_input"
         )
 
-        unanswered_invites = (
-            st.text_input(
-                "Unanswered invites",
-                placeholder="Example: 3",
-                key="unanswered_invites_input"
-            )
+        unanswered_invites = st.text_input(
+            "Unanswered invites",
+            key="unanswered_invites_input"
         )
 
         posted = st.text_input(
             "Posted",
-            placeholder="Example: 2 hours ago",
             key="posted_input"
         )
 
-
-    # =================================================
-    # CLIENT
-    # =================================================
 
     st.divider()
 
@@ -733,7 +1098,6 @@ with tab1:
 
         client_spent = st.text_input(
             "Client total spent",
-            placeholder="Example: $50K+",
             key="client_spent_input"
         )
 
@@ -742,7 +1106,6 @@ with tab1:
 
         client_hires = st.text_input(
             "Client hires",
-            placeholder="Example: 35",
             key="client_hires_input"
         )
 
@@ -751,7 +1114,6 @@ with tab1:
 
         client_rating = st.text_input(
             "Client rating",
-            placeholder="Example: 4.95",
             key="client_rating_input"
         )
 
@@ -760,7 +1122,6 @@ with tab1:
 
         client_location = st.text_input(
             "Client location",
-            placeholder="Example: United States",
             key="client_location_input"
         )
 
@@ -770,12 +1131,9 @@ with tab1:
 
     with c5:
 
-        client_active_hires = (
-            st.text_input(
-                "Active hires",
-                placeholder="Example: 3",
-                key="active_hires_input"
-            )
+        client_active_hires = st.text_input(
+            "Active hires",
+            key="active_hires_input"
         )
 
 
@@ -783,19 +1141,15 @@ with tab1:
 
         client_hours = st.text_input(
             "Hours billed",
-            placeholder="Example: 1,250",
             key="hours_billed_input"
         )
 
 
     with c7:
 
-        client_member_since = (
-            st.text_input(
-                "Member since",
-                placeholder="Example: 2018",
-                key="member_since_input"
-            )
+        client_member_since = st.text_input(
+            "Member since",
+            key="member_since_input"
         )
 
 
@@ -803,21 +1157,14 @@ with tab1:
 
         project_length = st.text_input(
             "Project length",
-            placeholder="Example: 1-3 months",
             key="project_length_input"
         )
 
 
     st.info(
-        f"💡 Your target rate is ${TARGET_HOURLY_RATE}/hr. "
-        "For hourly jobs, the system evaluates whether "
-        "that rate fits inside the client's range."
+        f"Target rate: ${TARGET_HOURLY_RATE}/hr."
     )
 
-
-    # =================================================
-    # ANALYZE BUTTON
-    # =================================================
 
     if st.button(
         "🚀 Analyze Job",
@@ -828,7 +1175,7 @@ with tab1:
         if not job_description.strip():
 
             st.warning(
-                "Please paste the job description."
+                "Job description is missing."
             )
 
         else:
@@ -840,275 +1187,89 @@ with tab1:
                 prompt = f"""
 You are a senior Upwork business opportunity analyst.
 
-Evaluate this job for ONE specific freelancer.
+Evaluate whether applying to this job is a smart
+use of time and Upwork Connects.
 
-The purpose is NOT to answer:
-"Can the freelancer do this?"
+FREELANCER:
 
-The purpose is:
-"Is applying to this job a smart use of time and Upwork Connects?"
-
-
-=====================================================
-FREELANCER
-=====================================================
-
-Positioning:
-
+- Top Rated
+- 100% Job Success
 - Amazon Listing Images Expert
 - High-End Photo Retoucher
 - Photoshop Expert
 - AI Image Specialist
-- Product Image Specialist
 - E-commerce Image Specialist
 
-Profile:
-
-- Top Rated
-- 100% Job Success
-- 5-star history
-- strong completed-job history
-- experienced freelancer
-
-Strongest work:
+Strongest skills:
 
 - Amazon listing images
+- e-commerce product imagery
 - product retouching
-- e-commerce images
+- high-end Photoshop
 - AI + Photoshop
 - photorealistic compositing
 - product replacement
 - lifestyle product integration
-- background replacement
-- preserving exact product geometry
+- preserving product geometry
 - interior manipulation
-- architectural retouching
-- natural portrait retouching
-- AI artifact correction
+- architectural editing
+- portrait retouching
 
-
-=====================================================
-PRICING STRATEGY
-=====================================================
-
-The freelancer's target sustainable hourly rate is:
-
+TARGET RATE:
 ${TARGET_HOURLY_RATE}/hour
 
+IMPORTANT BUDGET RULE:
 
-VERY IMPORTANT:
+For hourly jobs, judge whether
+${TARGET_HOURLY_RATE}/hour fits inside
+the client's range.
 
-For HOURLY jobs, do NOT judge the job using
-the LOWEST number in the client's range.
-
-Instead ask:
-
-"Can this freelancer reasonably bid at
-${TARGET_HOURLY_RATE}/hour within the client's range?"
-
+Do NOT judge an hourly range only
+by its minimum.
 
 Examples:
 
-Client range $15-$35/hr
+$15-$35/hr:
+reasonable because freelancer can bid $35.
 
-The freelancer can bid $35/hr.
+$25-$50/hr:
+good.
 
-This is NOT a terrible budget.
+$10-$25/hr:
+weak.
 
-Budget Quality should usually be approximately
-55-70 depending on scope and client quality.
+For fixed-price jobs, compare scope,
+complexity and likely hours to the budget.
 
+71 complex images for $100:
+Budget Quality approximately 0-10
+and normally a deal breaker.
 
-Client range $25-$50/hr
 
-The freelancer can comfortably bid at $35-$45/hr.
+SCORING:
 
-Budget Quality should usually be 75-90.
+SKILL MATCH:
+0-100
 
+CLIENT QUALITY:
+0-100
 
-Client range $10-$25/hr
+BUDGET QUALITY:
+0-100
 
-The freelancer's target rate does NOT fit.
+COMPETITION SCORE:
+0-100
 
-Budget Quality should usually be 20-40.
+100 = favorable competition.
 
+WIN PROBABILITY:
+0-100
 
-Client range $5-$15/hr
+DEAL BREAKER:
+YES only for a serious reason to avoid applying.
 
-Budget Quality should usually be 0-20.
 
-
-For FIXED PRICE jobs:
-
-Estimate the realistic workload.
-
-Consider:
-
-- number of images
-- complexity
-- revisions
-- precision required
-- likely working hours
-
-Then compare the fixed budget with a reasonable
-professional value of the work.
-
-
-Example:
-
-71 complex images for $100
-
-Budget Quality should be 0-10.
-
-This is normally a DEAL BREAKER.
-
-
-Example:
-
-8 high-end interior images for $500-$800
-
-This may be a healthy professional budget.
-
-
-=====================================================
-SKILL MATCH
-=====================================================
-
-Score 0-100.
-
-Judge only fit with the freelancer's strongest skills.
-
-Do NOT use budget when scoring Skill Match.
-
-
-=====================================================
-CLIENT QUALITY
-=====================================================
-
-Score 0-100.
-
-Consider:
-
-- lifetime spending
-- number of hires
-- active hires
-- hours billed
-- client rating
-- professionalism
-- clarity of brief
-- repeat-work potential
-- agency/company potential
-
-Do not punish a good client heavily just because
-one field such as rating is missing.
-
-
-=====================================================
-BUDGET QUALITY
-=====================================================
-
-Score 0-100.
-
-Use the pricing rules above.
-
-Most importantly:
-
-A range such as $15-$35/hr should NOT receive
-a score like 35 solely because its minimum is $15.
-
-If the freelancer can bid at the TOP of the range
-at their target rate, the opportunity may still
-have a healthy budget.
-
-
-=====================================================
-COMPETITION SCORE
-=====================================================
-
-Score 0-100.
-
-100 = very favorable.
-
-0 = extremely unfavorable.
-
-Consider:
-
-- proposals
-- interviewing
-- invites
-- unanswered invites
-- how recently posted
-
-Examples:
-
-5-10 proposals, 0 interviews:
-good competition.
-
-15-20 proposals, 0 interviews:
-reasonable competition.
-
-20-50 proposals, 10 interviews:
-poor competition.
-
-30 invites + 11 interviews:
-very unfavorable.
-
-
-=====================================================
-WIN PROBABILITY
-=====================================================
-
-Score 0-100.
-
-Estimate probability that THIS freelancer
-can stand out.
-
-Consider:
-
-- specialization
-- Top Rated
-- 100% JSS
-- portfolio fit
-- exact client problem
-- AI + Photoshop advantage
-- competition
-- pricing compatibility
-
-
-=====================================================
-DEAL BREAKER
-=====================================================
-
-Return YES only for a serious reason to avoid applying.
-
-Examples:
-
-- absurdly low fixed budget
-- clearly impossible deadline
-- huge unpaid test
-- major scope/budget mismatch
-- suspicious or clearly problematic job
-
-Do NOT return YES just because a job is imperfect.
-
-
-=====================================================
-CATEGORY
-=====================================================
-
-Choose exactly one:
-
-Amazon
-Product Retouching
-AI + Photoshop
-Interior / Architecture
-Portrait
-Other
-
-
-=====================================================
-JOB
-=====================================================
+JOB:
 
 TITLE:
 {clean_value(job_title)}
@@ -1119,7 +1280,7 @@ DESCRIPTION:
 BUDGET:
 {clean_value(budget)}
 
-PROPOSALS:
+APPLICANTS:
 {clean_value(proposals)}
 
 INTERVIEWING:
@@ -1128,9 +1289,6 @@ INTERVIEWING:
 INVITES:
 {clean_value(invites)}
 
-UNANSWERED INVITES:
-{clean_value(unanswered_invites)}
-
 POSTED:
 {clean_value(posted)}
 
@@ -1138,9 +1296,7 @@ PROJECT LENGTH:
 {clean_value(project_length)}
 
 
-=====================================================
-CLIENT
-=====================================================
+CLIENT:
 
 SPENT:
 {clean_value(client_spent)}
@@ -1148,14 +1304,8 @@ SPENT:
 HIRES:
 {clean_value(client_hires)}
 
-ACTIVE HIRES:
-{clean_value(client_active_hires)}
-
 RATING:
 {clean_value(client_rating)}
-
-HOURS:
-{clean_value(client_hours)}
 
 LOCATION:
 {clean_value(client_location)}
@@ -1164,11 +1314,9 @@ MEMBER SINCE:
 {clean_value(client_member_since)}
 
 
-=====================================================
-RETURN EXACTLY THIS FORMAT
-=====================================================
+RETURN EXACTLY:
 
-CATEGORY: category
+CATEGORY: Amazon or Product Retouching or AI + Photoshop or Interior / Architecture or Portrait or Other
 
 SKILL MATCH: X/100
 
@@ -1190,23 +1338,13 @@ WHY YOU CAN WIN:
 WHY THIS JOB IS ATTRACTIVE:
 - reason
 - reason
-- reason
 
 RISKS:
 - risk
 - risk
 
 RECOMMENDED BID:
-One concise recommendation only.
-
-Example:
-Recommended: $35/hr.
-
-or:
-
-Recommended: $700-$900 fixed.
-
-Do not include complicated formulas.
+One concise recommendation.
 
 PORTFOLIO TO SHOW:
 1. example
@@ -1216,24 +1354,21 @@ PORTFOLIO TO SHOW:
 APPLICATION STRATEGY:
 - recommendation
 - recommendation
-- recommendation
 
 PROPOSAL:
-Write a concise personalized Upwork proposal
+Write a personalized Upwork proposal
 of approximately 100-140 words.
 
-Never start with:
-"I am excited to apply."
-
+Never start with "I am excited to apply."
 Start with the client's actual problem.
-
-Sound natural, human and confident.
 """
 
                 try:
 
                     response = (
-                        openai_client.responses.create(
+                        openai_client
+                        .responses
+                        .create(
                             model="gpt-5-mini",
                             input=prompt
                         )
@@ -1243,10 +1378,6 @@ Sound natural, human and confident.
                         response.output_text
                     )
 
-
-                    # ---------------------------------
-                    # EXTRACT AI COMPONENT SCORES
-                    # ---------------------------------
 
                     skill_match = extract_number(
                         analysis,
@@ -1288,10 +1419,6 @@ Sound natural, human and confident.
                     )
 
 
-                    # ---------------------------------
-                    # PYTHON CALCULATES FINAL SCORE
-                    # ---------------------------------
-
                     opportunity_score = (
                         calculate_opportunity_score(
                             skill_match,
@@ -1309,26 +1436,16 @@ Sound natural, human and confident.
                         )
                     )
 
-
-                    category = (
-                        extract_text_value(
-                            analysis,
-                            "CATEGORY"
-                        )
+                    category = extract_text_value(
+                        analysis,
+                        "CATEGORY"
                     )
 
-
-                    proposal = (
-                        extract_section(
-                            analysis,
-                            "PROPOSAL"
-                        )
+                    proposal = extract_section(
+                        analysis,
+                        "PROPOSAL"
                     )
 
-
-                    # ---------------------------------
-                    # SAVE SESSION
-                    # ---------------------------------
 
                     st.session_state[
                         "analysis"
@@ -1371,10 +1488,6 @@ Sound natural, human and confident.
                     ] = proposal
 
                     st.session_state[
-                        "deal_breaker"
-                    ] = deal_breaker
-
-                    st.session_state[
                         "job_title"
                     ] = job_title
 
@@ -1390,7 +1503,7 @@ Sound natural, human and confident.
                 except Exception as e:
 
                     st.error(
-                        "The AI analysis could not be completed."
+                        "AI analysis failed."
                     )
 
                     st.code(
@@ -1398,72 +1511,7 @@ Sound natural, human and confident.
                     )
 
 
-    # =================================================
-    # DISPLAY RESULT
-    # =================================================
-
     if "analysis" in st.session_state:
-
-        analysis = st.session_state[
-            "analysis"
-        ]
-
-        opportunity_score = (
-            st.session_state.get(
-                "opportunity_score"
-            )
-        )
-
-        decision = (
-            st.session_state.get(
-                "decision"
-            )
-        )
-
-        skill_match = (
-            st.session_state.get(
-                "skill_match"
-            )
-        )
-
-        client_quality = (
-            st.session_state.get(
-                "client_quality"
-            )
-        )
-
-        budget_quality = (
-            st.session_state.get(
-                "budget_quality"
-            )
-        )
-
-        competition_score = (
-            st.session_state.get(
-                "competition_score"
-            )
-        )
-
-        win_probability = (
-            st.session_state.get(
-                "win_probability"
-            )
-        )
-
-        category = (
-            st.session_state.get(
-                "category",
-                ""
-            )
-        )
-
-        proposal = (
-            st.session_state.get(
-                "proposal",
-                ""
-            )
-        )
-
 
         st.divider()
 
@@ -1472,22 +1520,25 @@ Sound natural, human and confident.
         )
 
 
-        # =================================================
-        # FINAL SCORE FIRST
-        # =================================================
+        score = st.session_state.get(
+            "opportunity_score"
+        )
 
-        big1, big2 = st.columns(
+        decision = st.session_state.get(
+            "decision"
+        )
+
+
+        o1, o2 = st.columns(
             [2, 1]
         )
 
-        with big1:
+        o1.metric(
+            "Opportunity Score",
+            f"{score}/100"
+        )
 
-            st.metric(
-                "Opportunity Score",
-                f"{opportunity_score}/100"
-            )
-
-        with big2:
+        with o2:
 
             st.markdown(
                 "### Decision"
@@ -1500,38 +1551,28 @@ Sound natural, human and confident.
 
         st.write(
             "**Category:**",
-            category
+            st.session_state.get(
+                "category",
+                ""
+            )
         )
 
-
-        st.divider()
-
-
-        # =================================================
-        # COMPONENT SCORES
-        # =================================================
 
         c1, c2, c3 = st.columns(3)
 
         c1.metric(
             "Skill Match",
-            f"{skill_match}/100"
-            if skill_match is not None
-            else "—"
+            f"{st.session_state.get('skill_match')}/100"
         )
 
         c2.metric(
             "Client Quality",
-            f"{client_quality}/100"
-            if client_quality is not None
-            else "—"
+            f"{st.session_state.get('client_quality')}/100"
         )
 
         c3.metric(
             "Budget Quality",
-            f"{budget_quality}/100"
-            if budget_quality is not None
-            else "—"
+            f"{st.session_state.get('budget_quality')}/100"
         )
 
 
@@ -1539,16 +1580,12 @@ Sound natural, human and confident.
 
         c4.metric(
             "Competition",
-            f"{competition_score}/100"
-            if competition_score is not None
-            else "—"
+            f"{st.session_state.get('competition_score')}/100"
         )
 
         c5.metric(
             "Win Probability",
-            f"{win_probability}/100"
-            if win_probability is not None
-            else "—"
+            f"{st.session_state.get('win_probability')}/100"
         )
 
 
@@ -1559,13 +1596,11 @@ Sound natural, human and confident.
         )
 
         st.markdown(
-            analysis
+            st.session_state[
+                "analysis"
+            ]
         )
 
-
-        # =================================================
-        # SAVE
-        # =================================================
 
         st.divider()
 
@@ -1617,55 +1652,73 @@ Sound natural, human and confident.
                         ),
 
                     "opportunity_score":
-                        opportunity_score,
+                        st.session_state.get(
+                            "opportunity_score"
+                        ),
 
                     "skill_match":
-                        skill_match,
+                        st.session_state.get(
+                            "skill_match"
+                        ),
 
                     "client_quality":
-                        client_quality,
+                        st.session_state.get(
+                            "client_quality"
+                        ),
 
                     "budget_quality":
-                        budget_quality,
+                        st.session_state.get(
+                            "budget_quality"
+                        ),
 
                     "competition_score":
-                        competition_score,
+                        st.session_state.get(
+                            "competition_score"
+                        ),
 
                     "win_probability":
-                        win_probability,
+                        st.session_state.get(
+                            "win_probability"
+                        ),
 
                     "decision":
-                        decision,
+                        st.session_state.get(
+                            "decision"
+                        ),
 
                     "category":
-                        category,
+                        st.session_state.get(
+                            "category"
+                        ),
 
                     "status":
                         status,
 
                     "proposal":
-                        proposal,
+                        st.session_state.get(
+                            "proposal"
+                        ),
 
                     "contract_value":
                         contract_value
                 }
 
 
-                supabase.table(
-                    "jobs"
-                ).insert(
-                    data
-                ).execute()
-
+                (
+                    supabase
+                    .table("jobs")
+                    .insert(data)
+                    .execute()
+                )
 
                 st.success(
-                    "✅ Job saved to history!"
+                    "✅ Job saved!"
                 )
 
             except Exception as e:
 
                 st.error(
-                    "Could not save the job."
+                    "Could not save job."
                 )
 
                 st.code(
@@ -1674,7 +1727,7 @@ Sound natural, human and confident.
 
 
 # =====================================================
-# TAB 2 — FIND JOBS
+# TAB 2 — LIVE FIND JOBS
 # =====================================================
 
 with tab2:
@@ -1683,478 +1736,307 @@ with tab2:
         "🔎 Find Jobs"
     )
 
-    st.caption(
-        "Demo mode. Real Upwork jobs will appear here "
-        "after API approval."
-    )
-
-
-    demo_jobs = [
-
-        {
-            "title":
-                "AI Product Image Generation + Canva Rebrand",
-
-            "url":
-                "",
-
-            "description":
-                """
-Generate realistic product and fashion images
-for more than 30 products.
-
-Change fabrics and environments while keeping
-garments consistent and photographic.
-
-Create 5-7 Canva tiles per product.
-
-AI image generation combined with professional
-manual editing is preferred.
-""",
-
-            "category":
-                "AI + Photoshop",
-
-            "budget":
-                "$25-$45/hr",
-
-            "client_spent":
-                "$136K",
-
-            "client_hires":
-                "242",
-
-            "client_rating":
-                "",
-
-            "client_location":
-                "United Kingdom",
-
-            "active_hires":
-                "",
-
-            "hours_billed":
-                "7,680",
-
-            "member_since":
-                "2012",
-
-            "project_length":
-                "1-3 months",
-
-            "proposals":
-                "5-10",
-
-            "interviewing":
-                "0",
-
-            "invites":
-                "0",
-
-            "unanswered_invites":
-                "0",
-
-            "posted":
-                "4 hours ago",
-
-            "score":
-                91,
-
-            "decision":
-                "🔥 APPLY NOW"
-        },
-
-
-        {
-            "title":
-                "High-End Interior Photoshop Expert",
-
-            "url":
-                "",
-
-            "description":
-                """
-Edit approximately 8 high-end interior photographs.
-
-Remove objects, replace furniture and add curtains.
-
-All edits must look completely photographic.
-
-Previous AI attempts did not look realistic,
-so professional Photoshop work is required.
-""",
-
-            "category":
-                "Interior / Architecture",
-
-            "budget":
-                "$20-$45/hr",
-
-            "client_spent":
-                "$4.1K",
-
-            "client_hires":
-                "11",
-
-            "client_rating":
-                "",
-
-            "client_location":
-                "Australia",
-
-            "active_hires":
-                "4",
-
-            "hours_billed":
-                "152",
-
-            "member_since":
-                "",
-
-            "project_length":
-                "Less than 1 month",
-
-            "proposals":
-                "20-50",
-
-            "interviewing":
-                "1",
-
-            "invites":
-                "0",
-
-            "unanswered_invites":
-                "0",
-
-            "posted":
-                "",
-
-            "score":
-                88,
-
-            "decision":
-                "🟢 APPLY"
-        },
-
-
-        {
-            "title":
-                "Photo Editing and Retouching",
-
-            "url":
-                "",
-
-            "description":
-                """
-Branding and marketing agency needs
-a professional photo retoucher.
-
-Fewer than 10 images.
-
-Tasks include natural retouching,
-background replacement,
-expression adjustments
-and group compositing.
-
-Natural professional results are important.
-AI-assisted tools are welcome.
-""",
-
-            "category":
-                "Product Retouching",
-
-            "budget":
-                "$15-$35/hr",
-
-            "client_spent":
-                "$11K",
-
-            "client_hires":
-                "30",
-
-            "client_rating":
-                "",
-
-            "client_location":
-                "United States",
-
-            "active_hires":
-                "",
-
-            "hours_billed":
-                "499",
-
-            "member_since":
-                "",
-
-            "project_length":
-                "Less than 1 month",
-
-            "proposals":
-                "15-20",
-
-            "interviewing":
-                "0",
-
-            "invites":
-                "0",
-
-            "unanswered_invites":
-                "0",
-
-            "posted":
-                "",
-
-            "score":
-                84,
-
-            "decision":
-                "🟢 APPLY"
-        },
-
-
-        {
-            "title":
-                "Amazon Product Retoucher",
-
-            "url":
-                "",
-
-            "description":
-                """
-Edit 71 existing Amazon product images.
-
-Replace the fabric brand label on all images
-while preserving perspective, texture,
-lighting and stitching.
-
-Standardize 42 cosmetic pouch images
-to a reference.
-
-Exact proportions, embroidery, fabric,
-zipper and seams must be preserved.
-""",
-
-            "category":
-                "Amazon",
-
-            "budget":
-                "$100 fixed",
-
-            "client_spent":
-                "$2.4K",
-
-            "client_hires":
-                "51",
-
-            "client_rating":
-                "",
-
-            "client_location":
-                "Germany",
-
-            "active_hires":
-                "4",
-
-            "hours_billed":
-                "",
-
-            "member_since":
-                "2013",
-
-            "project_length":
-                "",
-
-            "proposals":
-                "15-20",
-
-            "interviewing":
-                "0",
-
-            "invites":
-                "0",
-
-            "unanswered_invites":
-                "0",
-
-            "posted":
-                "",
-
-            "score":
-                51,
-
-            "decision":
-                "🔴 SKIP"
-        }
-    ]
-
-
-    # =================================================
-    # FILTERS
-    # =================================================
-
-    st.markdown(
-        "### 🎚️ Filters"
-    )
-
-
-    f1, f2 = st.columns(2)
-
-
-    with f1:
-
-        minimum_score = st.slider(
-            "Minimum Opportunity Score",
-            0,
-            100,
-            65,
-            5
-        )
-
-
-    with f2:
-
-        category_filter = st.selectbox(
-            "Category",
-            [
-                "All",
-                "Amazon",
-                "Product Retouching",
-                "AI + Photoshop",
-                "Interior / Architecture",
-                "Portrait",
-                "Other"
-            ],
-            key="find_category_filter"
-        )
-
-
-    filtered_jobs = []
-
-
-    for job in demo_jobs:
-
-        if job["score"] < minimum_score:
-            continue
-
-        if (
-            category_filter != "All"
-            and
-            job["category"] != category_filter
-        ):
-            continue
-
-        filtered_jobs.append(
-            job
-        )
-
-
-    st.divider()
-
-
-    m1, m2, m3 = st.columns(3)
-
-
-    m1.metric(
-        "Jobs found",
-        len(demo_jobs)
-    )
-
-    m2.metric(
-        "Worth reviewing",
-        len(filtered_jobs)
-    )
-
-    m3.metric(
-        "Strong opportunities",
-        len([
-            job
-            for job in filtered_jobs
-            if job["score"] >= 80
-        ])
-    )
-
-
-    st.divider()
-
-
-    for index, job in enumerate(
-        filtered_jobs
+    if not st.session_state.get(
+        "UPWORK_ACCESS_TOKEN"
     ):
 
-        with st.container(
-            border=True
-        ):
+        st.warning(
+            "Connect Upwork first."
+        )
 
-            col1, col2, col3 = st.columns(
-                [4, 1, 1]
+    else:
+
+        st.success(
+            "🟢 LIVE Upwork marketplace search"
+        )
+
+
+        search_col1, search_col2 = (
+            st.columns(
+                [4, 1]
+            )
+        )
+
+
+        with search_col1:
+
+            search_expression = (
+                st.text_input(
+                    "Search Upwork",
+                    value="photo retouching",
+                    placeholder=(
+                        "photo retouching"
+                    )
+                )
             )
 
 
-            with col1:
+        with search_col2:
 
-                st.subheader(
-                    job["title"]
+            results_count = (
+                st.selectbox(
+                    "Results",
+                    [
+                        5,
+                        10,
+                        20
+                    ],
+                    index=1
+                )
+            )
+
+
+        if st.button(
+            "🔎 Search Upwork",
+            type="primary",
+            use_container_width=True
+        ):
+
+            if not search_expression.strip():
+
+                st.warning(
+                    "Enter a search phrase."
                 )
 
-                st.write(
-                    f"**Category:** {job['category']}"
-                )
+            else:
 
-                st.write(
-                    f"**Budget:** {job['budget']}"
-                )
-
-                st.write(
-                    f"**Client:** {job['client_spent']} spent"
-                )
-
-                st.write(
-                    f"**Proposals:** {job['proposals']}"
-                )
-
-
-            with col2:
-
-                st.metric(
-                    "Score",
-                    f"{job['score']}/100"
-                )
-
-                st.write(
-                    job["decision"]
-                )
-
-
-            with col3:
-
-                st.write("")
-
-                st.write("")
-
-                if st.button(
-                    "🎯 Analyze",
-                    key=f"analyze_{index}",
-                    use_container_width=True
+                with st.spinner(
+                    "Searching Upwork..."
                 ):
 
-                    st.session_state[
-                        "selected_job"
-                    ] = job
+                    try:
 
-                    st.session_state[
-                        "load_job_into_analyzer"
-                    ] = True
+                        total_count, edges = (
+                            search_upwork_jobs(
+                                search_expression,
+                                results_count
+                            )
+                        )
 
-                    st.session_state[
-                        "selected_job_loaded_message"
-                    ] = True
+                        live_jobs = []
 
-                    st.rerun()
+                        for edge in edges:
+
+                            node = (
+                                edge.get(
+                                    "node"
+                                )
+                                or {}
+                            )
+
+                            live_jobs.append(
+                                format_upwork_job(
+                                    node
+                                )
+                            )
+
+
+                        st.session_state[
+                            "live_jobs"
+                        ] = live_jobs
+
+                        st.session_state[
+                            "live_total_count"
+                        ] = total_count
+
+
+                    except Exception as e:
+
+                        st.error(
+                            "Upwork search failed."
+                        )
+
+                        st.code(
+                            str(e)
+                        )
+
+
+        live_jobs = (
+            st.session_state.get(
+                "live_jobs",
+                []
+            )
+        )
+
+
+        if live_jobs:
+
+            st.divider()
+
+
+            st.metric(
+                "Jobs found by Upwork",
+                st.session_state.get(
+                    "live_total_count",
+                    len(live_jobs)
+                )
+            )
+
+
+            st.caption(
+                f"Showing the newest "
+                f"{len(live_jobs)} results."
+            )
+
+
+            for index, job in enumerate(
+                live_jobs
+            ):
+
+                with st.container(
+                    border=True
+                ):
+
+                    col1, col2 = (
+                        st.columns(
+                            [5, 1]
+                        )
+                    )
+
+
+                    with col1:
+
+                        st.subheader(
+                            job["title"]
+                        )
+
+                        if job["budget"]:
+
+                            st.write(
+                                "**Budget:**",
+                                job["budget"]
+                            )
+
+
+                        if job[
+                            "client_spent"
+                        ]:
+
+                            st.write(
+                                "**Client spent:**",
+                                job[
+                                    "client_spent"
+                                ]
+                            )
+
+
+                        if job[
+                            "client_hires"
+                        ]:
+
+                            st.write(
+                                "**Client hires:**",
+                                job[
+                                    "client_hires"
+                                ]
+                            )
+
+
+                        if job[
+                            "client_rating"
+                        ]:
+
+                            st.write(
+                                "**Client rating:**",
+                                job[
+                                    "client_rating"
+                                ]
+                            )
+
+
+                        if job[
+                            "client_location"
+                        ]:
+
+                            st.write(
+                                "**Location:**",
+                                job[
+                                    "client_location"
+                                ]
+                            )
+
+
+                        if job[
+                            "proposals"
+                        ]:
+
+                            st.write(
+                                "**Applicants:**",
+                                job[
+                                    "proposals"
+                                ]
+                            )
+
+
+                        if job[
+                            "skills"
+                        ]:
+
+                            st.caption(
+                                "Skills: "
+                                + ", ".join(
+                                    job[
+                                        "skills"
+                                    ][:8]
+                                )
+                            )
+
+
+                        description = (
+                            job[
+                                "description"
+                            ]
+                            or ""
+                        )
+
+                        if len(
+                            description
+                        ) > 450:
+
+                            description = (
+                                description[
+                                    :450
+                                ]
+                                + "..."
+                            )
+
+                        st.write(
+                            description
+                        )
+
+
+                    with col2:
+
+                        st.write("")
+
+                        st.write("")
+
+                        if st.button(
+                            "🎯 Analyze",
+                            key=(
+                                f"live_analyze_"
+                                f"{index}"
+                            ),
+                            use_container_width=True
+                        ):
+
+                            st.session_state[
+                                "selected_job"
+                            ] = job
+
+                            st.session_state[
+                                "load_job_into_analyzer"
+                            ] = True
+
+                            st.session_state[
+                                "selected_job_loaded_message"
+                            ] = True
+
+                            st.rerun()
 
 
 # =====================================================
-# TAB 3 — JOB HISTORY
+# TAB 3 — HISTORY
 # =====================================================
 
 with tab3:
@@ -2162,7 +2044,6 @@ with tab3:
     st.subheader(
         "📊 Job History"
     )
-
 
     try:
 
@@ -2220,132 +2101,97 @@ with tab3:
                 == "Hired"
             ])
 
-            total_revenue = sum([
-                float(
-                    j.get(
-                        "contract_value"
-                    )
-                    or 0
-                )
-                for j in jobs
-                if j.get("status")
-                == "Hired"
-            ])
 
-
-            c1, c2, c3, c4, c5 = (
-                st.columns(5)
+            m1, m2, m3, m4 = (
+                st.columns(4)
             )
 
-
-            c1.metric(
-                "Jobs Analyzed",
+            m1.metric(
+                "Analyzed",
                 total_jobs
             )
 
-            c2.metric(
+            m2.metric(
                 "Applied",
                 applied
             )
 
-            c3.metric(
+            m3.metric(
                 "Interviews",
                 interviews
             )
 
-            c4.metric(
+            m4.metric(
                 "Hired",
                 hired
             )
 
-            c5.metric(
-                "Contract Value",
-                f"${total_revenue:,.0f}"
-            )
-
-
-            if applied > 0:
-
-                r1, r2 = st.columns(2)
-
-                r1.metric(
-                    "Interview Rate",
-                    f"{interviews / applied * 100:.1f}%"
-                )
-
-                r2.metric(
-                    "Hire Rate",
-                    f"{hired / applied * 100:.1f}%"
-                )
-
 
             st.divider()
-
-            st.subheader(
-                "📋 Saved Opportunities"
-            )
 
 
             for job in jobs:
 
                 title = (
-                    job.get("job_title")
-                    or "Untitled Job"
+                    job.get(
+                        "job_title"
+                    )
+                    or
+                    "Untitled Job"
                 )
 
                 score = (
                     job.get(
                         "opportunity_score"
                     )
-                    or "—"
+                    or
+                    "—"
                 )
 
-                job_status = (
-                    job.get("status")
-                    or "Not applied"
-                )
-
-                job_category = (
-                    job.get("category")
-                    or "Uncategorized"
+                status = (
+                    job.get(
+                        "status"
+                    )
+                    or
+                    "Not applied"
                 )
 
 
                 with st.expander(
                     f"{title} | "
-                    f"{job_category} | "
                     f"Score: {score} | "
-                    f"{job_status}"
+                    f"{status}"
                 ):
 
-
-                    p1, p2, p3 = (
+                    c1, c2, c3 = (
                         st.columns(3)
                     )
 
-
-                    p1.metric(
+                    c1.metric(
                         "Opportunity Score",
                         job.get(
                             "opportunity_score"
                         )
-                        or "—"
+                        or
+                        "—"
                     )
 
-                    p2.metric(
+                    c2.metric(
                         "Skill Match",
                         job.get(
                             "skill_match"
                         )
-                        or "—"
+                        or
+                        "—"
                     )
 
-                    p3.metric(
+                    c3.metric(
                         "Win Probability",
                         job.get(
                             "win_probability"
                         )
-                        or "—"
+                        or
+                        "—"
                     )
 
 
@@ -2358,11 +2204,9 @@ with tab3:
                     ]
 
 
-                    if (
-                        job_status
-                        not in statuses
-                    ):
-                        job_status = (
+                    if status not in statuses:
+
+                        status = (
                             "Not applied"
                         )
 
@@ -2371,9 +2215,12 @@ with tab3:
                         "Update status",
                         statuses,
                         index=statuses.index(
-                            job_status
+                            status
                         ),
-                        key=f"status_{job['id']}"
+                        key=(
+                            f"status_"
+                            f"{job['id']}"
+                        )
                     )
 
 
@@ -2387,49 +2234,43 @@ with tab3:
                             or 0
                         ),
                         step=50.0,
-                        key=f"value_{job['id']}"
+                        key=(
+                            f"value_"
+                            f"{job['id']}"
+                        )
                     )
 
 
                     if st.button(
                         "Update",
-                        key=f"update_{job['id']}"
+                        key=(
+                            f"update_"
+                            f"{job['id']}"
+                        )
                     ):
 
-                        try:
+                        (
+                            supabase
+                            .table("jobs")
+                            .update({
+                                "status":
+                                    new_status,
 
-                            (
-                                supabase
-                                .table("jobs")
-                                .update({
-                                    "status":
-                                        new_status,
-
-                                    "contract_value":
-                                        new_value
-                                })
-                                .eq(
-                                    "id",
-                                    job["id"]
-                                )
-                                .execute()
+                                "contract_value":
+                                    new_value
+                            })
+                            .eq(
+                                "id",
+                                job["id"]
                             )
+                            .execute()
+                        )
 
-                            st.success(
-                                "✅ Updated!"
-                            )
+                        st.success(
+                            "✅ Updated!"
+                        )
 
-                            st.rerun()
-
-                        except Exception as e:
-
-                            st.error(
-                                "Could not update the job."
-                            )
-
-                            st.code(
-                                str(e)
-                            )
+                        st.rerun()
 
 
     except Exception as e:
