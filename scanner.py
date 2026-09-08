@@ -184,9 +184,16 @@ NEGATIVE_KEYWORDS = [
 
 HARD_NEGATIVE_TITLE_KEYWORDS = [
     "web designer", "web developer", "shopify designer", "shopify developer",
-    "graphic designer", "visual content creator", "illustrator", "ui/ux", "ux/ui",
+    "visual content creator", "illustrator", "ui/ux", "ux/ui",
     "social media", "meta ads", "facebook ads", "google ads", "video editor",
-    "motion designer", "motion graphics",
+    "video editing", "motion designer", "motion graphics",
+]
+
+HARD_REJECT_TITLE_PATTERNS = [
+    ("graphic designer", "video editor"),
+    ("graphic designer", "video editing"),
+    ("graphic design", "video editor"),
+    ("graphic design", "video editing"),
 ]
 
 CORE_PHOTO_SIGNALS = [
@@ -245,10 +252,26 @@ def relevance_score(job):
 def is_relevant_job(job):
     text = job_search_text(job)
     title = str(job.get("title") or "").lower()
-    core_matches = [k for k in CORE_PHOTO_SIGNALS if k in text]
-    hard_title_matches = [k for k in HARD_NEGATIVE_TITLE_KEYWORDS if k in title]
+
+    core_matches = [
+        k for k in CORE_PHOTO_SIGNALS
+        if k in text
+    ]
+
+    hard_title_matches = [
+        k for k in HARD_NEGATIVE_TITLE_KEYWORDS
+        if k in title
+    ]
+
+    # Reject clear mixed graphic-design/video roles even when the
+    # description happens to mention Photoshop or AI.
+    for pattern in HARD_REJECT_TITLE_PATTERNS:
+        if all(part in title for part in pattern):
+            return False
+
     if hard_title_matches and not core_matches:
         return False
+
     return relevance_score(job) >= RELEVANCE_MIN_SCORE
 
 
