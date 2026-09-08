@@ -34,7 +34,7 @@ jobs:
           UPWORK_CLIENT_SECRET: ${{ secrets.UPWORK_CLIENT_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-               run: |
+        run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python scanner.py --force
           else
