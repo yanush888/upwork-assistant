@@ -2290,8 +2290,8 @@ with st.sidebar:
     1. Smart Search across your niches
     2. Remove duplicates
     3. Quick Fit removes noise
-    4. AI ranks strongest jobs
-    5. Analyze individual jobs
+    4. AI analyzes Top 15
+    5. Daily Best keeps score ≥80
     6. Decide APPLY / SKIP
     7. Generate proposal
     8. Save & track results
@@ -3294,7 +3294,7 @@ with tab2:
                             10,
                             15
                         ],
-                        index=1
+                        index=3
                     )
                 )
 
@@ -3306,6 +3306,19 @@ with tab2:
                     "Quick Fit jobs and calculate "
                     "their Opportunity Score."
                 )
+
+
+            strong_opportunity_threshold = st.slider(
+                "Minimum Opportunity Score for Daily Best Jobs",
+                min_value=65,
+                max_value=95,
+                value=80,
+                step=1,
+                help=(
+                    "Only AI-analyzed jobs at or above this score "
+                    "will be shown in Daily Best Jobs."
+                )
+            )
 
 
             if st.button(
@@ -3456,13 +3469,62 @@ with tab2:
                 st.divider()
 
 
+                strong_results = [
+                    result
+                    for result in top_results
+                    if result.get(
+                        "opportunity_score",
+                        0
+                    ) >= strong_opportunity_threshold
+                ]
+
+
                 st.markdown(
-                    "## 🏆 Best Opportunities"
+                    "## 🔥 Daily Best Jobs"
                 )
 
 
+                if strong_results:
+
+                    st.success(
+                        f"{len(strong_results)} strong opportunity"
+                        f"{'y' if len(strong_results) == 1 else 'ies'} "
+                        f"found with Opportunity Score ≥ "
+                        f"{strong_opportunity_threshold}."
+                    )
+
+                    st.caption(
+                        "Review these first. Lower-scoring AI analyses "
+                        "are hidden from this shortlist."
+                    )
+
+                else:
+
+                    best_score = max(
+                        [
+                            result.get(
+                                "opportunity_score",
+                                0
+                            )
+                            for result in top_results
+                        ],
+                        default=0
+                    )
+
+                    st.warning(
+                        "No strong opportunities right now — "
+                        "don't spend Connects."
+                    )
+
+                    st.caption(
+                        f"Best analyzed job: {best_score}/100. "
+                        f"Your Daily Best threshold is "
+                        f"{strong_opportunity_threshold}/100."
+                    )
+
+
                 for rank, result in enumerate(
-                    top_results,
+                    strong_results,
                     start=1
                 ):
 
