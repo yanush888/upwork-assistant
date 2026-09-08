@@ -535,33 +535,76 @@ Penalize:
 PRICING
 =====================================================
 
-Freelancer target sustainable hourly rate:
+Freelancer pricing baseline:
 
-${TARGET_HOURLY_RATE}/hour
+${TARGET_HOURLY_RATE}/hour is the BASELINE MINIMUM sustainable rate,
+NOT the default recommended rate for every job.
 
-For HOURLY jobs:
+The recommended bid must reflect:
+- specialization required
+- project complexity
+- commercial value
+- degree of manual Photoshop work
+- need for realism / product preservation
+- client quality
+- urgency
+- likelihood of revisions
+- whether the work is commodity editing or specialized high-end work
 
-Do NOT judge the job by the lowest number
-in the client's hourly range.
+Use this practical pricing ladder as guidance:
 
-Instead determine whether the freelancer can reasonably
-bid around ${TARGET_HOURLY_RATE}/hour.
+Simple / routine retouching:
+$35-$40/hr
+
+Commercial or product retouching:
+$40-$45/hr
+
+AI + Photoshop compositing:
+$40-$50/hr
+
+High-end fashion / luxury product compositing:
+$45-$55/hr
+
+Very specialized, high-value or technically difficult work:
+$50+/hr when justified.
+
+IMPORTANT:
+Do not recommend $35/hr automatically just because the client
+did not specify a budget.
+
+If the job says:
+Hourly — budget not specified
+
+then estimate a fair bid from the complexity and specialization.
+For high-end compositing, handbag preservation, realistic hand/object
+contact, shadows, reflections, product geometry, or luxury/fashion work,
+a bid around $45-$55/hr may be appropriate.
+
+If the client's stated hourly ceiling is below the freelancer's
+appropriate rate:
+- do NOT automatically lower the recommended bid to fit the client
+- reduce BUDGET QUALITY
+- reduce OPPORTUNITY SCORE if necessary
+- explain that the client's range may not support the freelancer's level
 
 Examples:
 
-$15-$35/hr:
-reasonable because freelancer can bid $35/hr.
+$15-$35/hr + simple retouching:
+$35/hr can be reasonable.
 
-$25-$50/hr:
-good budget.
+$15-$35/hr + advanced high-end compositing:
+the job may be underpriced; recommend a realistic rate and lower
+Budget Quality if the client ceiling does not support it.
 
-$10-$25/hr:
-weak budget because the freelancer's target rate
-does not fit.
+$25-$50/hr + complex AI/Photoshop compositing:
+good budget; recommended bid may be $45-$50/hr.
 
 For FIXED jobs:
 
-Compare realistic workload against the fixed budget.
+Estimate realistic scope, likely hours, complexity, and revision risk,
+then recommend a project price.
+
+Do NOT mechanically calculate every fixed job as $35 × hours.
 
 Example:
 
@@ -752,11 +795,17 @@ RISKS:
 RECOMMENDED BID:
 One concise recommendation only.
 
-Example:
-Recommended: $35/hr.
+The recommendation must be based on the project's actual complexity
+and value, not simply the $35/hr baseline.
 
-or:
-Recommended: $600-$800 fixed.
+Examples:
+Recommended: $38-$40/hr for routine retouching.
+
+Recommended: $45-$50/hr for high-end AI + Photoshop compositing.
+
+Recommended: $50-$55/hr for luxury/fashion product compositing when justified.
+
+Recommended: $600-$800 fixed for a clearly scoped project.
 
 PORTFOLIO TO SHOW:
 1. example
@@ -3687,6 +3736,16 @@ with tab2:
                                 )
 
 
+                            top_full_key = (
+                                "show_full_top_"
+                                + str(
+                                    job_state_key(
+                                        job
+                                    )
+                                )
+                            )
+
+
                             if st.button(
                                 "📄 Open Full Analysis",
                                 key=(
@@ -3698,26 +3757,31 @@ with tab2:
                             ):
 
                                 st.session_state[
-                                    "selected_job"
-                                ] = job
+                                    top_full_key
+                                ] = not st.session_state.get(
+                                    top_full_key,
+                                    False
+                                )
 
 
-                                st.session_state[
-                                    "load_job_into_analyzer"
-                                ] = True
+                        if st.session_state.get(
+                            top_full_key,
+                            False
+                        ):
 
+                            st.divider()
 
-                                st.session_state[
-                                    "pending_analysis_result"
-                                ] = result
+                            st.markdown(
+                                "### 📄 Full Analysis"
+                            )
 
-
-                                st.session_state[
-                                    "selected_job_loaded_message"
-                                ] = True
-
-
-                                st.rerun()
+                            st.markdown(
+                                result.get(
+                                    "analysis"
+                                )
+                                or
+                                "Detailed analysis is unavailable."
+                            )
 
 
                         # -----------------------------------------
@@ -4174,6 +4238,14 @@ with tab2:
 
                         with open_col2:
 
+                            single_full_key = (
+                                "show_full_single_"
+                                + str(
+                                    current_key
+                                )
+                            )
+
+
                             if st.button(
                                 "📄 Open Full Analysis",
                                 key=(
@@ -4184,26 +4256,11 @@ with tab2:
                             ):
 
                                 st.session_state[
-                                    "selected_job"
-                                ] = job
-
-
-                                st.session_state[
-                                    "load_job_into_analyzer"
-                                ] = True
-
-
-                                st.session_state[
-                                    "pending_analysis_result"
-                                ] = current_result
-
-
-                                st.session_state[
-                                    "selected_job_loaded_message"
-                                ] = True
-
-
-                                st.rerun()
+                                    single_full_key
+                                ] = not st.session_state.get(
+                                    single_full_key,
+                                    False
+                                )
 
 
                         with open_col3:
@@ -4212,6 +4269,26 @@ with tab2:
                                 "Full Analysis includes risks, "
                                 "portfolio recommendations, "
                                 "application strategy and proposal."
+                            )
+
+
+                        if st.session_state.get(
+                            single_full_key,
+                            False
+                        ):
+
+                            st.divider()
+
+                            st.markdown(
+                                "### 📄 Full Analysis"
+                            )
+
+                            st.markdown(
+                                current_result.get(
+                                    "analysis"
+                                )
+                                or
+                                "Detailed analysis is unavailable."
                             )
 
 
