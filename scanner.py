@@ -29,6 +29,38 @@ OPPORTUNITY_THRESHOLD = int(os.getenv("OPPORTUNITY_THRESHOLD", "80"))
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCAN_HOURS = {8, 12, 16, 20}
 
+STRONG_KEYWORDS = [
+    "photoshop",
+    "retouch",
+    "retouching",
+    "photo editing",
+    "image editing",
+    "product image",
+    "product images",
+    "product photo",
+    "product photography",
+    "e-commerce",
+    "ecommerce",
+    "amazon",
+    "listing image",
+    "listing images",
+    "lifestyle image",
+    "lifestyle images",
+    "compositing",
+    "composite",
+    "background replacement",
+    "background removal",
+    "ai image",
+    "ai images",
+    "generative ai",
+    "ai photography",
+    "interior",
+    "architectural",
+    "architecture",
+    "real estate",
+    "lightroom",
+]
+
 UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql"
 
