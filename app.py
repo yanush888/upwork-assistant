@@ -18,6 +18,25 @@ st.set_page_config(
 
 TARGET_HOURLY_RATE = 35
 
+# =====================================================
+# SMART SEARCH SETTINGS
+# =====================================================
+
+SMART_SEARCH_QUERIES = [
+    "amazon product images",
+    "ecommerce product retouching",
+    "product photo retouching photoshop",
+    "product image compositing",
+    "AI image photoshop",
+    "AI product photography",
+    "interior photo editing photoshop",
+    "architectural photo retouching",
+    "real estate photo editing",
+    "high end photo retouching"
+]
+
+SMART_SEARCH_PER_QUERY = 20
+
 UPWORK_AUTH_URL = (
     "https://www.upwork.com/"
     "ab/account-security/oauth2/authorize"
@@ -1326,6 +1345,83 @@ def search_upwork_jobs(
 
 
 # =====================================================
+# SMART SEARCH
+# =====================================================
+
+def smart_search_upwork_jobs(
+    queries=None,
+    first_per_query=SMART_SEARCH_PER_QUERY
+):
+
+    queries = queries or SMART_SEARCH_QUERIES
+
+    unique_nodes = {}
+    errors = []
+
+    for search_expression in queries:
+
+        try:
+
+            _, edges = search_upwork_jobs(
+                search_expression,
+                first_per_query
+            )
+
+            for edge in edges:
+
+                node = (
+                    edge.get("node")
+                    or {}
+                )
+
+                job_id = node.get("id")
+
+                # Prefer the Upwork job ID for deduplication.
+                # Fall back to a title+description fingerprint.
+                if job_id:
+
+                    dedupe_key = str(job_id)
+
+                else:
+
+                    dedupe_key = (
+                        str(node.get("title", "")).strip().lower()
+                        + "|"
+                        + str(node.get("description", ""))[:300].strip().lower()
+                    )
+
+                if dedupe_key not in unique_nodes:
+
+                    unique_nodes[dedupe_key] = node
+
+        except Exception as e:
+
+            errors.append(
+                f"{search_expression}: {e}"
+            )
+
+    jobs = []
+
+    for node in unique_nodes.values():
+
+        job = format_upwork_job(node)
+
+        job["quick_fit"] = calculate_quick_fit(
+            job
+        )
+
+        jobs.append(job)
+
+    jobs = sorted(
+        jobs,
+        key=lambda x: x.get("quick_fit", 0),
+        reverse=True
+    )
+
+    return jobs, errors
+
+
+# =====================================================
 # BUDGET PARSING
 # =====================================================
 
@@ -2191,14 +2287,14 @@ with st.sidebar:
 
 
     st.write("""
-    1. Search live jobs
-    2. Quick Fit removes noise
-    3. Analyze individual jobs
+    1. Smart Search across your niches
+    2. Remove duplicates
+    3. Quick Fit removes noise
     4. AI ranks strongest jobs
-    5. Decide APPLY / SKIP
-    6. Generate proposal
-    7. Save result
-    8. Track Interview / Hired
+    5. Analyze individual jobs
+    6. Decide APPLY / SKIP
+    7. Generate proposal
+    8. Save & track results
     """)
 
 
@@ -2780,27 +2876,32 @@ with tab2:
         )
 
 
-        s1, s2 = st.columns(
-            [4, 1]
+        search_mode = st.radio(
+            "Search mode",
+            [
+                "🔥 Smart Search for Me",
+                "🔎 Manual Search"
+            ],
+            horizontal=True
         )
 
 
-        with s1:
+        if search_mode == "🔎 Manual Search":
 
-            search_expression = (
-                st.text_input(
-                    "Search Upwork",
-                    value=(
-                        "photo editing retouching"
-                    )
-                )
+            s1, s2 = st.columns(
+                [4, 1]
             )
 
+            with s1:
 
-        with s2:
+                search_expression = st.text_input(
+                    "Search Upwork",
+                    value="photo editing retouching"
+                )
 
-            results_count = (
-                st.selectbox(
+            with s2:
+
+                results_count = st.selectbox(
                     "Results",
                     [
                         10,
@@ -2809,7 +2910,29 @@ with tab2:
                     ],
                     index=1
                 )
+
+            search_button_label = "🔎 Search Upwork"
+
+        else:
+
+            st.info(
+                "Smart Search checks your strongest niches, "
+                "combines the results, removes duplicates and "
+                "ranks them with Quick Fit before AI analysis."
             )
+
+            with st.expander(
+                "Search niches"
+            ):
+
+                for query_text in SMART_SEARCH_QUERIES:
+
+                    st.write(
+                        "•",
+                        query_text
+                    )
+
+            search_button_label = "🔥 Find Best Jobs for Me"
 
 
         # =================================================
@@ -2817,25 +2940,53 @@ with tab2:
         # =================================================
 
         if st.button(
-            "🔎 Search Upwork",
+            search_button_label,
             type="primary",
             use_container_width=True
         ):
 
-            if not search_expression.strip():
+            with st.spinner(
+                "Searching Upwork..."
+            ):
 
-                st.warning(
-                    "Enter a search phrase."
-                )
+                try:
 
+                    if search_mode == "🔥 Smart Search for Me":
 
-            else:
+                        live_jobs, smart_errors = (
+                            smart_search_upwork_jobs()
+                        )
 
-                with st.spinner(
-                    "Searching Upwork..."
-                ):
+                        st.session_state[
+                            "live_jobs"
+                        ] = live_jobs
 
-                    try:
+                        st.session_state[
+                            "live_total_count"
+                        ] = len(
+                            live_jobs
+                        )
+
+                        st.session_state[
+                            "search_mode_used"
+                        ] = "smart"
+
+                        if smart_errors:
+
+                            st.warning(
+                                "Some search niches could not be loaded, "
+                                "but the available results were kept."
+                            )
+
+                    else:
+
+                        if not search_expression.strip():
+
+                            st.warning(
+                                "Enter a search phrase."
+                            )
+
+                            st.stop()
 
                         total_count, edges = (
                             search_upwork_jobs(
@@ -2844,82 +2995,73 @@ with tab2:
                             )
                         )
 
-
                         live_jobs = []
-
 
                         for edge in edges:
 
                             node = (
-                                edge.get(
-                                    "node"
-                                )
+                                edge.get("node")
                                 or {}
                             )
 
-
-                            job = (
-                                format_upwork_job(
-                                    node
-                                )
+                            job = format_upwork_job(
+                                node
                             )
 
-
-                            job[
-                                "quick_fit"
-                            ] = (
+                            job["quick_fit"] = (
                                 calculate_quick_fit(
                                     job
                                 )
                             )
 
-
                             live_jobs.append(
                                 job
                             )
 
-
                         live_jobs = sorted(
                             live_jobs,
-                            key=lambda x:
-                                x[
-                                    "quick_fit"
-                                ],
+                            key=lambda x: x["quick_fit"],
                             reverse=True
                         )
-
 
                         st.session_state[
                             "live_jobs"
                         ] = live_jobs
 
-
                         st.session_state[
                             "live_total_count"
                         ] = total_count
 
-
-                        # Clear previous results after a new search
-
-                        st.session_state.pop(
-                            "top_job_analyses",
-                            None
-                        )
-
                         st.session_state[
-                            "single_job_analyses"
-                        ] = {}
+                            "search_mode_used"
+                        ] = "manual"
 
 
-                    except Exception as e:
+                    # Clear old AI results after every new search
 
-                        st.error(
-                            "Upwork search failed."
-                        )
+                    st.session_state.pop(
+                        "top_job_analyses",
+                        None
+                    )
 
-                        st.code(
-                            str(e)
-                        )
+                    st.session_state[
+                        "single_job_analyses"
+                    ] = {}
+
+                    st.success(
+                        f"✅ Loaded {len(st.session_state.get('live_jobs', []))} "
+                        "unique jobs."
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        "Upwork search failed."
+                    )
+
+                    st.code(
+                        str(e)
+                    )
 
 
         live_jobs = (
@@ -3078,8 +3220,23 @@ with tab2:
             m1, m2, m3 = st.columns(3)
 
 
+            if st.session_state.get(
+                "search_mode_used"
+            ) == "smart":
+
+                first_metric_label = (
+                    "Unique jobs found"
+                )
+
+            else:
+
+                first_metric_label = (
+                    "Upwork matches"
+                )
+
+
             m1.metric(
-                "Upwork matches",
+                first_metric_label,
                 st.session_state.get(
                     "live_total_count",
                     0
@@ -3134,7 +3291,8 @@ with tab2:
                         [
                             3,
                             5,
-                            10
+                            10,
+                            15
                         ],
                         index=1
                     )
