@@ -1,1 +1,37 @@
+name: Upwork Opportunity Scanner
 
+on:
+  workflow_dispatch:
+
+  schedule:
+    # Run hourly. scanner.py decides whether the current
+    # Europe/Kyiv hour is one of: 08, 12, 16, 20.
+    # This avoids daylight-saving-time problems.
+    - cron: "5 * * * *"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements-scanner.txt
+
+      - name: Run Upwork scanner
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UPWORK_CLIENT_ID: ${{ secrets.UPWORK_CLIENT_ID }}
+          UPWORK_CLIENT_SECRET: ${{ secrets.UPWORK_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scanner.py
