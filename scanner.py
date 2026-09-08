@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import html
 import hashlib
 from datetime import datetime
@@ -1735,13 +1736,32 @@ def calculate_quick_fit(job):
         min(100, score)
     )
 
-def scheduled_slot_now():
+def scheduled_slot_now(force=False):
+    """
+    Return the current Kyiv time and scanner slot key.
+
+    Automatic runs execute only at 08:00, 12:00, 16:00 and 20:00
+    in the Europe/Kyiv timezone.
+
+    Manual runs can bypass the schedule with:
+        python scanner.py --force
+
+    FORCE_RUN=1 is also supported as a fallback.
+    """
     now = datetime.now(KYIV_TZ)
-    force = os.getenv("FORCE_RUN", "0") == "1"
-    if force:
+
+    force_run = (
+        force
+        or "--force" in sys.argv
+        or os.getenv("FORCE_RUN", "0") == "1"
+    )
+
+    if force_run:
         return now, f"manual-{now:%Y%m%d-%H%M%S}"
+
     if now.hour not in SCAN_HOURS:
         return now, None
+
     return now, f"{now:%Y%m%d}-{now.hour:02d}"
 
 def already_ran(slot_key):
@@ -1841,9 +1861,25 @@ def format_alert(result):
     return "\n".join(lines)
 
 def main():
-    now, slot_key = scheduled_slot_now()
+    force_run = (
+        "--force" in sys.argv
+        or os.getenv("FORCE_RUN", "0") == "1"
+    )
+
+    now, slot_key = scheduled_slot_now(
+        force=force_run
+    )
+
+    if force_run:
+        print(
+            f"[{now.isoformat()}] Manual FORCE scan requested."
+        )
+
     if slot_key is None:
-        print(f"[{now.isoformat()}] Not a scheduled Kyiv scan hour; exiting.")
+        print(
+            f"[{now.isoformat()}] "
+            "Not a scheduled Kyiv scan hour; exiting."
+        )
         return 0
     if not slot_key.startswith("manual-") and already_ran(slot_key):
         print(f"Slot {slot_key} already completed; exiting.")
