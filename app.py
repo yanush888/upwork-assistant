@@ -72,7 +72,7 @@ upwork_redirect_uri = st.secrets.get(
 
 
 # =====================================================
-# BASIC HELPERS
+# HELPERS
 # =====================================================
 
 def clean_value(value):
@@ -88,7 +88,10 @@ def clean_value(value):
     return value
 
 
-def extract_number(text, label):
+def extract_number(
+    text,
+    label
+):
 
     pattern = (
         rf"{re.escape(label)}:\s*(\d+)"
@@ -205,6 +208,30 @@ def clear_analysis_state():
         )
 
 
+def job_state_key(
+    job,
+    index=None
+):
+
+    job_id = job.get(
+        "id"
+    )
+
+    if job_id:
+        return str(
+            job_id
+        )
+
+    title = job.get(
+        "title",
+        "job"
+    )
+
+    return (
+        f"{index}_{title}"
+    )
+
+
 # =====================================================
 # MONEY HELPERS
 # =====================================================
@@ -290,7 +317,7 @@ def money_display(money):
 
 
 # =====================================================
-# OPPORTUNITY SCORING
+# OPPORTUNITY SCORE
 # =====================================================
 
 def calculate_opportunity_score(
@@ -335,6 +362,9 @@ def calculate_opportunity_score(
         + win_probability * 0.20
     )
 
+
+    # Terrible budget should never become APPLY
+
     if budget_quality <= 15:
 
         score = min(
@@ -349,12 +379,18 @@ def calculate_opportunity_score(
             69
         )
 
+
+    # Serious deal breaker
+
     if deal_breaker:
 
         score = min(
             score,
             59
         )
+
+
+    # Very low win probability
 
     if win_probability < 35:
 
@@ -363,10 +399,13 @@ def calculate_opportunity_score(
             64
         )
 
+
     return score
 
 
-def decision_from_score(score):
+def decision_from_score(
+    score
+):
 
     if score >= 90:
         return "🔥 APPLY NOW"
@@ -503,8 +542,7 @@ does not fit.
 
 For FIXED jobs:
 
-Compare the realistic amount of work against
-the fixed budget.
+Compare realistic workload against the fixed budget.
 
 Example:
 
@@ -522,6 +560,7 @@ SKILL MATCH:
 Judge only how closely the job matches
 the freelancer's strongest skills.
 
+
 CLIENT QUALITY:
 0-100
 
@@ -535,6 +574,7 @@ Consider:
 - brief quality
 - repeat-work potential
 
+
 BUDGET QUALITY:
 0-100
 
@@ -546,6 +586,7 @@ Consider:
 - complexity
 - freelancer seniority
 
+
 COMPETITION SCORE:
 0-100
 
@@ -554,6 +595,7 @@ COMPETITION SCORE:
 
 Consider applicants, interviews, invites
 and job age when available.
+
 
 WIN PROBABILITY:
 0-100
@@ -571,6 +613,7 @@ Consider:
 - AI + Photoshop advantage
 - competition
 - pricing compatibility
+
 
 DEAL BREAKER:
 
@@ -720,7 +763,7 @@ Sound natural, concise and confident.
 
 
 # =====================================================
-# RUN FULL AI ANALYSIS
+# RUN AI ANALYSIS
 # =====================================================
 
 def analyze_job_with_ai(job):
@@ -738,9 +781,7 @@ def analyze_job_with_ai(job):
         )
     )
 
-    analysis = (
-        response.output_text
-    )
+    analysis = response.output_text
 
 
     skill_match = extract_number(
@@ -828,7 +869,9 @@ def analyze_job_with_ai(job):
 
 
     return {
-        "job": job,
+
+        "job":
+            job,
 
         "analysis":
             analysis,
@@ -869,7 +912,7 @@ def analyze_job_with_ai(job):
 
 
 # =====================================================
-# LOAD ANALYSIS INTO SESSION
+# LOAD ANALYSIS INTO MAIN ANALYZER
 # =====================================================
 
 def load_analysis_into_session(
@@ -880,98 +923,92 @@ def load_analysis_into_session(
         "job"
     ]
 
-    st.session_state[
-        "analysis"
-    ] = result[
-        "analysis"
-    ]
+    fields = {
+        "analysis":
+            result.get(
+                "analysis"
+            ),
 
-    st.session_state[
-        "opportunity_score"
-    ] = result[
-        "opportunity_score"
-    ]
+        "opportunity_score":
+            result.get(
+                "opportunity_score"
+            ),
 
-    st.session_state[
-        "decision"
-    ] = result[
-        "decision"
-    ]
+        "decision":
+            result.get(
+                "decision"
+            ),
 
-    st.session_state[
-        "skill_match"
-    ] = result[
-        "skill_match"
-    ]
+        "skill_match":
+            result.get(
+                "skill_match"
+            ),
 
-    st.session_state[
-        "client_quality"
-    ] = result[
-        "client_quality"
-    ]
+        "client_quality":
+            result.get(
+                "client_quality"
+            ),
 
-    st.session_state[
-        "budget_quality"
-    ] = result[
-        "budget_quality"
-    ]
+        "budget_quality":
+            result.get(
+                "budget_quality"
+            ),
 
-    st.session_state[
-        "competition_score"
-    ] = result[
-        "competition_score"
-    ]
+        "competition_score":
+            result.get(
+                "competition_score"
+            ),
 
-    st.session_state[
-        "win_probability"
-    ] = result[
-        "win_probability"
-    ]
+        "win_probability":
+            result.get(
+                "win_probability"
+            ),
 
-    st.session_state[
-        "category"
-    ] = result[
-        "category"
-    ]
+        "category":
+            result.get(
+                "category"
+            ),
 
-    st.session_state[
-        "recommended_bid"
-    ] = result[
-        "recommended_bid"
-    ]
+        "recommended_bid":
+            result.get(
+                "recommended_bid"
+            ),
 
-    st.session_state[
-        "proposal"
-    ] = result[
-        "proposal"
-    ]
+        "proposal":
+            result.get(
+                "proposal"
+            ),
 
-    st.session_state[
-        "deal_breaker"
-    ] = result[
-        "deal_breaker"
-    ]
+        "deal_breaker":
+            result.get(
+                "deal_breaker"
+            ),
 
-    st.session_state[
-        "job_title"
-    ] = job.get(
-        "title",
-        ""
-    )
+        "job_title":
+            job.get(
+                "title",
+                ""
+            ),
 
-    st.session_state[
-        "job_url"
-    ] = job.get(
-        "url",
-        ""
-    )
+        "job_url":
+            job.get(
+                "url",
+                ""
+            ),
 
-    st.session_state[
-        "job_description"
-    ] = job.get(
-        "description",
-        ""
-    )
+        "job_description":
+            job.get(
+                "description",
+                ""
+            )
+    }
+
+
+    for key, value in fields.items():
+
+        st.session_state[
+            key
+        ] = value
 
 
 # =====================================================
@@ -1110,6 +1147,7 @@ def upwork_graphql(
             "Upwork is not connected."
         )
 
+
     response = requests.post(
         UPWORK_GRAPHQL_URL,
         headers={
@@ -1129,9 +1167,11 @@ def upwork_graphql(
         timeout=30
     )
 
+
     response.raise_for_status()
 
     payload = response.json()
+
 
     if payload.get(
         "errors"
@@ -1144,6 +1184,7 @@ def upwork_graphql(
                 ]
             )
         )
+
 
     return payload.get(
         "data",
@@ -1240,8 +1281,10 @@ def search_upwork_jobs(
     }
     """
 
+
     variables = {
         "filter": {
+
             "searchExpression_eq":
                 search_expression,
 
@@ -1255,10 +1298,12 @@ def search_upwork_jobs(
         }
     }
 
+
     data = upwork_graphql(
         query,
         variables
     )
+
 
     result = (
         data.get(
@@ -1266,6 +1311,7 @@ def search_upwork_jobs(
             {}
         )
     )
+
 
     return (
         result.get(
@@ -1308,6 +1354,8 @@ def parse_budget(node):
     )
 
 
+    # HOURLY WITH RANGE
+
     if (
         hourly_min
         and hourly_min > 0
@@ -1339,6 +1387,7 @@ def parse_budget(node):
                 f"${hourly_min:g}/hr"
             )
 
+
         return {
             "type":
                 "hourly",
@@ -1356,6 +1405,8 @@ def parse_budget(node):
                 None
         }
 
+
+    # HOURLY WITHOUT BUDGET
 
     if hourly_type == "NOT_PROVIDED":
 
@@ -1376,6 +1427,8 @@ def parse_budget(node):
                 None
         }
 
+
+    # FIXED
 
     if (
         fixed_amount
@@ -1449,11 +1502,11 @@ def format_upwork_job(node):
         location.get(
             "city"
         ),
-
         location.get(
             "country"
         )
     ]
+
 
     location_text = ", ".join([
         x
@@ -1463,6 +1516,7 @@ def format_upwork_job(node):
 
 
     skills = []
+
 
     for skill in (
         node.get(
@@ -1489,6 +1543,7 @@ def format_upwork_job(node):
 
 
     return {
+
         "id":
             node.get(
                 "id",
@@ -1679,6 +1734,7 @@ def calculate_quick_fit(job):
 
     score = 0
 
+
     text = (
         (
             job.get(
@@ -1702,6 +1758,8 @@ def calculate_quick_fit(job):
     )
 
 
+    # SKILLS
+
     matches = sum(
         1
         for keyword
@@ -1709,11 +1767,14 @@ def calculate_quick_fit(job):
         if keyword in text
     )
 
+
     score += min(
         matches * 8,
         40
     )
 
+
+    # BUDGET
 
     if (
         job.get(
@@ -1727,6 +1788,7 @@ def calculate_quick_fit(job):
                 "hourly_max"
             )
         )
+
 
         if hourly_max is None:
 
@@ -1766,6 +1828,7 @@ def calculate_quick_fit(job):
             )
         )
 
+
         if fixed is None:
 
             score += 5
@@ -1790,10 +1853,13 @@ def calculate_quick_fit(job):
 
             score -= 10
 
+
     else:
 
         score += 5
 
+
+    # CLIENT
 
     spent = (
         job.get(
@@ -1840,11 +1906,14 @@ def calculate_quick_fit(job):
         score += 2
 
 
+    # COMPETITION
+
     applicants = (
         job.get(
             "proposals"
         )
     )
+
 
     if applicants is None:
 
@@ -1857,6 +1926,7 @@ def calculate_quick_fit(job):
             applicants = int(
                 applicants
             )
+
 
             if applicants <= 5:
 
@@ -1878,6 +1948,7 @@ def calculate_quick_fit(job):
 
                 score -= 10
 
+
         except Exception:
 
             score += 5
@@ -1896,9 +1967,7 @@ def calculate_quick_fit(job):
     )
 
 
-def quick_fit_label(
-    score
-):
+def quick_fit_label(score):
 
     if score >= 75:
         return "🔥 Strong"
@@ -1913,7 +1982,8 @@ def quick_fit_label(
 
 
 # =====================================================
-# PREFILL ANALYZER AFTER RERUN
+# PREFILL MAIN ANALYZER
+# MUST RUN BEFORE WIDGETS ARE CREATED
 # =====================================================
 
 if st.session_state.get(
@@ -1927,7 +1997,9 @@ if st.session_state.get(
         )
     )
 
+
     mappings = {
+
         "job_title_input":
             "title",
 
@@ -1980,6 +2052,7 @@ if st.session_state.get(
             "project_length"
     }
 
+
     for session_key, job_key in mappings.items():
 
         value = selected_job.get(
@@ -2004,7 +2077,7 @@ if st.session_state.get(
 
 
 # =====================================================
-# LOAD EXISTING AI RESULT AFTER RERUN
+# LOAD PREVIOUSLY GENERATED ANALYSIS
 # =====================================================
 
 if st.session_state.get(
@@ -2016,6 +2089,7 @@ if st.session_state.get(
             "pending_analysis_result"
         )
     )
+
 
     load_analysis_into_session(
         pending_result
@@ -2045,11 +2119,13 @@ with st.sidebar:
         "🔗 Upwork API"
     )
 
+
     if not upwork_api_enabled:
 
         st.warning(
             "API disabled"
         )
+
 
     elif st.session_state.get(
         "UPWORK_ACCESS_TOKEN"
@@ -2058,6 +2134,7 @@ with st.sidebar:
         st.success(
             "✅ Upwork connected"
         )
+
 
         if st.button(
             "Disconnect Upwork",
@@ -2076,11 +2153,13 @@ with st.sidebar:
 
             st.rerun()
 
+
     else:
 
         st.info(
             "🔑 API ready"
         )
+
 
         st.link_button(
             "Connect Upwork",
@@ -2091,9 +2170,11 @@ with st.sidebar:
 
     st.divider()
 
+
     st.markdown(
         "### 💵 Pricing"
     )
+
 
     st.metric(
         "Target hourly rate",
@@ -2103,15 +2184,17 @@ with st.sidebar:
 
     st.divider()
 
+
     st.markdown(
         "### 🎯 Workflow"
     )
 
+
     st.write("""
     1. Search live jobs
     2. Quick Fit removes noise
-    3. AI analyzes strongest jobs
-    4. Rank by Opportunity Score
+    3. Analyze individual jobs
+    4. AI ranks strongest jobs
     5. Decide APPLY / SKIP
     6. Generate proposal
     7. Save result
@@ -2141,7 +2224,7 @@ with tab1:
     ):
 
         st.success(
-            "✅ Job loaded from Find Jobs."
+            "✅ Job and AI analysis loaded."
         )
 
         st.session_state[
@@ -2152,6 +2235,7 @@ with tab1:
     st.subheader(
         "Job Information"
     )
+
 
     col1, col2 = st.columns(
         [2, 1]
@@ -2165,10 +2249,12 @@ with tab1:
             key="job_title_input"
         )
 
+
         job_url = st.text_input(
             "Upwork URL",
             key="job_url_input"
         )
+
 
         job_description = st.text_area(
             "Job description",
@@ -2183,25 +2269,30 @@ with tab1:
             "### 💰 Budget & Competition"
         )
 
+
         budget = st.text_input(
             "Budget / Hourly Rate",
             key="budget_input"
         )
+
 
         proposals = st.text_input(
             "Applicants",
             key="proposals_input"
         )
 
+
         interviewing = st.text_input(
             "Interviewing",
             key="interviewing_input"
         )
 
+
         invites = st.text_input(
             "Invites sent",
             key="invites_input"
         )
+
 
         unanswered_invites = (
             st.text_input(
@@ -2209,6 +2300,7 @@ with tab1:
                 key="unanswered_invites_input"
             )
         )
+
 
         posted = st.text_input(
             "Posted",
@@ -2218,58 +2310,48 @@ with tab1:
 
     st.divider()
 
+
     st.markdown(
         "### 👤 Client Information"
     )
 
-    c1, c2, c3, c4 = (
-        st.columns(4)
-    )
+
+    c1, c2, c3, c4 = st.columns(4)
 
 
     with c1:
 
-        client_spent = (
-            st.text_input(
-                "Client total spent",
-                key="client_spent_input"
-            )
+        client_spent = st.text_input(
+            "Client total spent",
+            key="client_spent_input"
         )
 
 
     with c2:
 
-        client_hires = (
-            st.text_input(
-                "Client hires",
-                key="client_hires_input"
-            )
+        client_hires = st.text_input(
+            "Client hires",
+            key="client_hires_input"
         )
 
 
     with c3:
 
-        client_rating = (
-            st.text_input(
-                "Client rating",
-                key="client_rating_input"
-            )
+        client_rating = st.text_input(
+            "Client rating",
+            key="client_rating_input"
         )
 
 
     with c4:
 
-        client_location = (
-            st.text_input(
-                "Client location",
-                key="client_location_input"
-            )
+        client_location = st.text_input(
+            "Client location",
+            key="client_location_input"
         )
 
 
-    c5, c6, c7, c8 = (
-        st.columns(4)
-    )
+    c5, c6, c7, c8 = st.columns(4)
 
 
     with c5:
@@ -2284,11 +2366,9 @@ with tab1:
 
     with c6:
 
-        client_hours = (
-            st.text_input(
-                "Hours billed",
-                key="hours_billed_input"
-            )
+        client_hours = st.text_input(
+            "Hours billed",
+            key="hours_billed_input"
         )
 
 
@@ -2304,11 +2384,9 @@ with tab1:
 
     with c8:
 
-        project_length = (
-            st.text_input(
-                "Project length",
-                key="project_length_input"
-            )
+        project_length = st.text_input(
+            "Project length",
+            key="project_length_input"
         )
 
 
@@ -2334,9 +2412,11 @@ with tab1:
                 "Job description is missing."
             )
 
+
         else:
 
             manual_job = {
+
                 "title":
                     job_title,
 
@@ -2403,6 +2483,7 @@ with tab1:
                         result
                     )
 
+
                 except Exception as e:
 
                     st.error(
@@ -2415,12 +2496,13 @@ with tab1:
 
 
     # =================================================
-    # DISPLAY ANALYSIS
+    # DISPLAY MAIN ANALYSIS
     # =================================================
 
     if "analysis" in st.session_state:
 
         st.divider()
+
 
         st.subheader(
             "📈 Opportunity Overview"
@@ -2440,10 +2522,8 @@ with tab1:
         )
 
 
-        o1, o2 = (
-            st.columns(
-                [2, 1]
-            )
+        o1, o2 = st.columns(
+            [2, 1]
         )
 
 
@@ -2473,9 +2553,7 @@ with tab1:
         )
 
 
-        c1, c2, c3 = (
-            st.columns(3)
-        )
+        c1, c2, c3 = st.columns(3)
 
 
         c1.metric(
@@ -2483,10 +2561,12 @@ with tab1:
             f"{st.session_state.get('skill_match')}/100"
         )
 
+
         c2.metric(
             "Client Quality",
             f"{st.session_state.get('client_quality')}/100"
         )
+
 
         c3.metric(
             "Budget Quality",
@@ -2494,15 +2574,14 @@ with tab1:
         )
 
 
-        c4, c5 = (
-            st.columns(2)
-        )
+        c4, c5 = st.columns(2)
 
 
         c4.metric(
             "Competition",
             f"{st.session_state.get('competition_score')}/100"
         )
+
 
         c5.metric(
             "Win Probability",
@@ -2524,9 +2603,11 @@ with tab1:
 
         st.divider()
 
+
         st.subheader(
             "🤖 Detailed Analysis"
         )
+
 
         st.markdown(
             st.session_state[
@@ -2536,10 +2617,11 @@ with tab1:
 
 
         # =================================================
-        # SAVE JOB
+        # SAVE
         # =================================================
 
         st.divider()
+
 
         st.subheader(
             "💾 Save to Job History"
@@ -2558,13 +2640,11 @@ with tab1:
         )
 
 
-        contract_value = (
-            st.number_input(
-                "Contract value ($)",
-                min_value=0.0,
-                value=0.0,
-                step=50.0
-            )
+        contract_value = st.number_input(
+            "Contract value ($)",
+            min_value=0.0,
+            value=0.0,
+            step=50.0
         )
 
 
@@ -2647,8 +2727,12 @@ with tab1:
 
                 (
                     supabase
-                    .table("jobs")
-                    .insert(data)
+                    .table(
+                        "jobs"
+                    )
+                    .insert(
+                        data
+                    )
                     .execute()
                 )
 
@@ -2688,6 +2772,7 @@ with tab2:
             "Connect Upwork first."
         )
 
+
     else:
 
         st.success(
@@ -2695,10 +2780,8 @@ with tab2:
         )
 
 
-        s1, s2 = (
-            st.columns(
-                [4, 1]
-            )
+        s1, s2 = st.columns(
+            [4, 1]
         )
 
 
@@ -2744,6 +2827,7 @@ with tab2:
                 st.warning(
                     "Enter a search phrase."
                 )
+
 
             else:
 
@@ -2815,10 +2899,16 @@ with tab2:
                         ] = total_count
 
 
+                        # Clear previous results after a new search
+
                         st.session_state.pop(
                             "top_job_analyses",
                             None
                         )
+
+                        st.session_state[
+                            "single_job_analyses"
+                        ] = {}
 
 
                     except Exception as e:
@@ -2841,21 +2931,20 @@ with tab2:
 
 
         # =================================================
-        # QUICK FILTER
+        # FILTERS
         # =================================================
 
         if live_jobs:
 
             st.divider()
 
+
             st.markdown(
                 "### 🎚️ Quick Filter"
             )
 
 
-            f1, f2, f3 = (
-                st.columns(3)
-            )
+            f1, f2, f3 = st.columns(3)
 
 
             with f1:
@@ -2929,6 +3018,7 @@ with tab2:
                             )
                         )
 
+
                         if (
                             max_rate
                             is not None
@@ -2950,10 +3040,8 @@ with tab2:
                         )
                     )
 
-                    if (
-                        applicants
-                        is not None
-                    ):
+
+                    if applicants is not None:
 
                         try:
 
@@ -2968,6 +3056,7 @@ with tab2:
                             ):
 
                                 continue
+
 
                         except Exception:
 
@@ -2986,9 +3075,7 @@ with tab2:
             st.divider()
 
 
-            m1, m2, m3 = (
-                st.columns(3)
-            )
+            m1, m2, m3 = st.columns(3)
 
 
             m1.metric(
@@ -3028,15 +3115,14 @@ with tab2:
 
             st.divider()
 
+
             st.markdown(
                 "## 🧠 AI Opportunity Ranking"
             )
 
 
-            ai1, ai2 = (
-                st.columns(
-                    [1, 3]
-                )
+            ai1, ai2 = st.columns(
+                [1, 3]
             )
 
 
@@ -3060,7 +3146,7 @@ with tab2:
                 st.info(
                     "AI will analyze the strongest "
                     "Quick Fit jobs and calculate "
-                    "the real Opportunity Score."
+                    "their Opportunity Score."
                 )
 
 
@@ -3083,17 +3169,14 @@ with tab2:
                         "No jobs available after filtering."
                     )
 
+
                 else:
 
-                    progress = (
-                        st.progress(
-                            0
-                        )
+                    progress = st.progress(
+                        0
                     )
 
-                    status_text = (
-                        st.empty()
-                    )
+                    status_text = st.empty()
 
                     analyzed_jobs = []
 
@@ -3118,9 +3201,37 @@ with tab2:
                                 )
                             )
 
+
                             analyzed_jobs.append(
                                 result
                             )
+
+
+                            single_key = (
+                                job_state_key(
+                                    job,
+                                    i
+                                )
+                            )
+
+
+                            if (
+                                "single_job_analyses"
+                                not in
+                                st.session_state
+                            ):
+
+                                st.session_state[
+                                    "single_job_analyses"
+                                ] = {}
+
+
+                            st.session_state[
+                                "single_job_analyses"
+                            ][
+                                single_key
+                            ] = result
+
 
                         except Exception as e:
 
@@ -3171,7 +3282,7 @@ with tab2:
 
 
             # =================================================
-            # AI RANKING RESULTS
+            # TOP AI RESULTS
             # =================================================
 
             top_results = (
@@ -3185,6 +3296,7 @@ with tab2:
             if top_results:
 
                 st.divider()
+
 
                 st.markdown(
                     "## 🏆 Best Opportunities"
@@ -3205,10 +3317,8 @@ with tab2:
                         border=True
                     ):
 
-                        r1, r2, r3 = (
-                            st.columns(
-                                [5, 1.3, 1.5]
-                            )
+                        r1, r2, r3 = st.columns(
+                            [5, 1.3, 1.5]
                         )
 
 
@@ -3309,11 +3419,13 @@ with tab2:
                                 )
                             )
 
+
                             st.write(
                                 result[
                                     "decision"
                                 ]
                             )
+
 
                             st.caption(
                                 f"Quick Fit: "
@@ -3326,9 +3438,9 @@ with tab2:
                             if st.button(
                                 "📄 Open Full Analysis",
                                 key=(
-                                    f"open_ai_"
+                                    f"open_top_"
                                     f"{rank}_"
-                                    f"{job.get('id')}"
+                                    f"{job_state_key(job)}"
                                 ),
                                 use_container_width=True
                             ):
@@ -3337,30 +3449,42 @@ with tab2:
                                     "selected_job"
                                 ] = job
 
+
                                 st.session_state[
                                     "load_job_into_analyzer"
                                 ] = True
+
 
                                 st.session_state[
                                     "pending_analysis_result"
                                 ] = result
 
+
                                 st.session_state[
                                     "selected_job_loaded_message"
                                 ] = True
 
+
                                 st.rerun()
-
-
-                st.divider()
 
 
             # =================================================
             # QUICK FIT RESULTS
             # =================================================
 
+            st.divider()
+
+
             st.markdown(
                 "## 📋 Quick Fit Results"
+            )
+
+
+            single_analyses = (
+                st.session_state.setdefault(
+                    "single_job_analyses",
+                    {}
+                )
             )
 
 
@@ -3375,16 +3499,26 @@ with tab2:
                 filtered_jobs
             ):
 
+                current_key = (
+                    job_state_key(
+                        job,
+                        index
+                    )
+                )
+
+
                 with st.container(
                     border=True
                 ):
 
-                    c1, c2, c3 = (
-                        st.columns(
-                            [5, 1, 1]
-                        )
+                    c1, c2, c3 = st.columns(
+                        [5, 1.2, 1.3]
                     )
 
+
+                    # -----------------------------------------
+                    # JOB INFORMATION
+                    # -----------------------------------------
 
                     with c1:
 
@@ -3407,6 +3541,8 @@ with tab2:
                                 job.get(
                                     "budget"
                                 )
+                                or
+                                "Unknown"
                             )
 
 
@@ -3518,12 +3654,20 @@ with tab2:
                         )
 
 
+                    # -----------------------------------------
+                    # QUICK FIT
+                    # -----------------------------------------
+
                     with c2:
 
                         st.metric(
                             "Quick Fit",
-                            f"{job['quick_fit']}/100"
+                            (
+                                f"{job['quick_fit']}"
+                                f"/100"
+                            )
                         )
+
 
                         st.write(
                             quick_fit_label(
@@ -3534,37 +3678,228 @@ with tab2:
                         )
 
 
+                    # -----------------------------------------
+                    # ANALYZE BUTTON
+                    # -----------------------------------------
+
                     with c3:
-
-                        st.write("")
-
-                        st.write("")
 
                         if st.button(
                             "🎯 Analyze",
                             key=(
                                 f"single_analyze_"
-                                f"{index}_"
-                                f"{job.get('id')}"
+                                f"{current_key}"
                             ),
+                            type="secondary",
                             use_container_width=True
                         ):
 
-                            st.session_state[
-                                "selected_job"
-                            ] = job
+                            with st.spinner(
+                                "AI is analyzing this job..."
+                            ):
 
-                            st.session_state[
-                                "load_job_into_analyzer"
-                            ] = True
+                                try:
 
-                            st.session_state[
-                                "selected_job_loaded_message"
-                            ] = True
+                                    single_result = (
+                                        analyze_job_with_ai(
+                                            job
+                                        )
+                                    )
 
-                            clear_analysis_state()
 
-                            st.rerun()
+                                    st.session_state[
+                                        "single_job_analyses"
+                                    ][
+                                        current_key
+                                    ] = single_result
+
+
+                                    single_analyses[
+                                        current_key
+                                    ] = single_result
+
+
+                                except Exception as e:
+
+                                    st.error(
+                                        "AI analysis failed."
+                                    )
+
+                                    st.code(
+                                        str(e)
+                                    )
+
+
+                    # =================================================
+                    # INLINE AI RESULT
+                    # =================================================
+
+                    current_result = (
+                        st.session_state.get(
+                            "single_job_analyses",
+                            {}
+                        ).get(
+                            current_key
+                        )
+                    )
+
+
+                    if current_result:
+
+                        st.divider()
+
+
+                        st.markdown(
+                            "### 🤖 AI Opportunity Analysis"
+                        )
+
+
+                        a1, a2, a3, a4 = (
+                            st.columns(
+                                [1, 1, 1.5, 1.5]
+                            )
+                        )
+
+
+                        with a1:
+
+                            st.metric(
+                                "Opportunity",
+                                (
+                                    f"{current_result['opportunity_score']}"
+                                    f"/100"
+                                )
+                            )
+
+
+                        with a2:
+
+                            st.metric(
+                                "Win Probability",
+                                (
+                                    f"{current_result['win_probability']}"
+                                    f"/100"
+                                )
+                            )
+
+
+                        with a3:
+
+                            st.markdown(
+                                "#### Decision"
+                            )
+
+                            st.markdown(
+                                f"### "
+                                f"{current_result['decision']}"
+                            )
+
+
+                        with a4:
+
+                            if current_result.get(
+                                "recommended_bid"
+                            ):
+
+                                st.markdown(
+                                    "**Recommended bid**"
+                                )
+
+                                st.write(
+                                    current_result[
+                                        "recommended_bid"
+                                    ]
+                                )
+
+
+                        b1, b2, b3 = (
+                            st.columns(3)
+                        )
+
+
+                        b1.metric(
+                            "Skill Match",
+                            (
+                                f"{current_result['skill_match']}"
+                                f"/100"
+                            )
+                        )
+
+
+                        b2.metric(
+                            "Client Quality",
+                            (
+                                f"{current_result['client_quality']}"
+                                f"/100"
+                            )
+                        )
+
+
+                        b3.metric(
+                            "Budget Quality",
+                            (
+                                f"{current_result['budget_quality']}"
+                                f"/100"
+                            )
+                        )
+
+
+                        st.write(
+                            "**Category:**",
+                            current_result.get(
+                                "category"
+                            )
+                        )
+
+
+                        open_col1, open_col2 = (
+                            st.columns(
+                                [1, 3]
+                            )
+                        )
+
+
+                        with open_col1:
+
+                            if st.button(
+                                "📄 Open Full Analysis",
+                                key=(
+                                    f"open_single_"
+                                    f"{current_key}"
+                                ),
+                                use_container_width=True
+                            ):
+
+                                st.session_state[
+                                    "selected_job"
+                                ] = job
+
+
+                                st.session_state[
+                                    "load_job_into_analyzer"
+                                ] = True
+
+
+                                st.session_state[
+                                    "pending_analysis_result"
+                                ] = current_result
+
+
+                                st.session_state[
+                                    "selected_job_loaded_message"
+                                ] = True
+
+
+                                st.rerun()
+
+
+                        with open_col2:
+
+                            st.caption(
+                                "Full Analysis includes risks, "
+                                "portfolio recommendations, "
+                                "application strategy and proposal."
+                            )
 
 
 # =====================================================
@@ -3582,8 +3917,12 @@ with tab3:
 
         response = (
             supabase
-            .table("jobs")
-            .select("*")
+            .table(
+                "jobs"
+            )
+            .select(
+                "*"
+            )
             .order(
                 "created_at",
                 desc=True
@@ -3722,6 +4061,7 @@ with tab3:
 
 
             st.divider()
+
 
             st.subheader(
                 "📋 Saved Opportunities"
@@ -3875,7 +4215,9 @@ with tab3:
 
                             (
                                 supabase
-                                .table("jobs")
+                                .table(
+                                    "jobs"
+                                )
                                 .update({
                                     "status":
                                         new_status,
@@ -3885,7 +4227,9 @@ with tab3:
                                 })
                                 .eq(
                                     "id",
-                                    job["id"]
+                                    job[
+                                        "id"
+                                    ]
                                 )
                                 .execute()
                             )
