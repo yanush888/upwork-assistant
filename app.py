@@ -4254,6 +4254,12 @@ with tab2:
                                 )
 
 
+                                st.write(
+                                    "**Країна, Місто:**",
+                                    job.get("client_location") or "Unknown"
+                                )
+
+
                             st.write(
                                 "**Category:**",
                                 result.get(
@@ -4567,6 +4573,12 @@ with tab2:
                                 job.get("unanswered_invites")
                                 if job.get("unanswered_invites") is not None
                                 else "Unknown"
+                            )
+
+
+                            st.write(
+                                "**Країна, Місто:**",
+                                job.get("client_location") or "Unknown"
                             )
 
 
