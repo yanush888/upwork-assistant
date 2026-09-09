@@ -988,6 +988,15 @@ INTERVIEWING:
 INVITES:
 {clean_value(job.get("invites"))}
 
+UNANSWERED INVITES:
+{clean_value(job.get("unanswered_invites"))}
+
+HIRES ON THIS JOB:
+{clean_value(job.get("job_hires"))}
+
+LAST VIEWED BY CLIENT:
+{clean_value(job.get("last_client_activity"))}
+
 POSTED:
 {clean_value(job.get("posted"))}
 
@@ -1685,6 +1694,18 @@ def search_upwork_jobs(
                     enterprise
                     premium
 
+                    job {
+                        activityStat {
+                            jobActivity {
+                                lastClientActivity
+                                invitesSent
+                                totalInvitedToInterview
+                                totalHired
+                                totalUnansweredInvites
+                            }
+                        }
+                    }
+
                     createdDateTime
                     publishedDateTime
 
@@ -2012,6 +2033,10 @@ def format_upwork_job(node):
         )
     )
 
+    marketplace_job = node.get("job") or {}
+    activity_stat = marketplace_job.get("activityStat") or {}
+    job_activity = activity_stat.get("jobActivity") or {}
+
 
     location_parts = [
         location.get(
@@ -2121,14 +2146,20 @@ def format_upwork_job(node):
                 "totalApplicants"
             ),
 
+        "last_client_activity":
+            job_activity.get("lastClientActivity"),
+
+        "job_hires":
+            job_activity.get("totalHired"),
+
         "interviewing":
-            "",
+            job_activity.get("totalInvitedToInterview"),
 
         "invites":
-            "",
+            job_activity.get("invitesSent"),
 
         "unanswered_invites":
-            "",
+            job_activity.get("totalUnansweredInvites"),
 
         "posted":
             node.get(
@@ -4036,6 +4067,44 @@ with tab2:
                                 )
 
 
+                                st.write(
+                                    "**Last viewed by client:**",
+                                    format_job_age(job.get("last_client_activity"))
+                                    if job.get("last_client_activity")
+                                    else "Unknown"
+                                )
+
+                                activity_col1, activity_col2 = st.columns(2)
+
+                                with activity_col1:
+                                    st.write(
+                                        "**Hires:**",
+                                        job.get("job_hires")
+                                        if job.get("job_hires") is not None
+                                        else "Unknown"
+                                    )
+                                    st.write(
+                                        "**Interviewing:**",
+                                        job.get("interviewing")
+                                        if job.get("interviewing") is not None
+                                        else "Unknown"
+                                    )
+
+                                with activity_col2:
+                                    st.write(
+                                        "**Invites sent:**",
+                                        job.get("invites")
+                                        if job.get("invites") is not None
+                                        else "Unknown"
+                                    )
+                                    st.write(
+                                        "**Unanswered invites:**",
+                                        job.get("unanswered_invites")
+                                        if job.get("unanswered_invites") is not None
+                                        else "Unknown"
+                                    )
+
+
                             with info2:
 
                                 st.write(
@@ -4328,6 +4397,44 @@ with tab2:
                                     )
                                 )
                             )
+
+
+                            st.write(
+                                "**Last viewed by client:**",
+                                format_job_age(job.get("last_client_activity"))
+                                if job.get("last_client_activity")
+                                else "Unknown"
+                            )
+
+                            activity_col1, activity_col2 = st.columns(2)
+
+                            with activity_col1:
+                                st.write(
+                                    "**Hires:**",
+                                    job.get("job_hires")
+                                    if job.get("job_hires") is not None
+                                    else "Unknown"
+                                )
+                                st.write(
+                                    "**Interviewing:**",
+                                    job.get("interviewing")
+                                    if job.get("interviewing") is not None
+                                    else "Unknown"
+                                )
+
+                            with activity_col2:
+                                st.write(
+                                    "**Invites sent:**",
+                                    job.get("invites")
+                                    if job.get("invites") is not None
+                                    else "Unknown"
+                                )
+                                st.write(
+                                    "**Unanswered invites:**",
+                                    job.get("unanswered_invites")
+                                    if job.get("unanswered_invites") is not None
+                                    else "Unknown"
+                                )
 
 
                             if job.get(
