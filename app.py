@@ -192,6 +192,30 @@ def format_job_age(posted_value):
 
 
 
+
+def format_hire_rate(job):
+    """Return the client's hire rate, e.g. 67%."""
+    try:
+        hires = job.get("client_hires")
+        jobs_posted = job.get("client_jobs")
+
+        if hires is None or jobs_posted in (None, "", 0, "0"):
+            return "Unknown"
+
+        hires = float(hires)
+        jobs_posted = float(jobs_posted)
+
+        if jobs_posted <= 0:
+            return "Unknown"
+
+        rate = (hires / jobs_posted) * 100
+        rate = max(0, min(rate, 100))
+
+        return f"{rate:.0f}%"
+
+    except Exception:
+        return "Unknown"
+
 def generate_manual_cover_letter(job):
     """
     Generate a concise, job-specific Upwork cover letter on demand.
@@ -4181,6 +4205,12 @@ with tab2:
                                 )
 
 
+                                st.write(
+                                    "**Hire rate:**",
+                                    format_hire_rate(job)
+                                )
+
+
                             with info2:
 
                                 st.write(
@@ -4488,6 +4518,12 @@ with tab2:
                                 job.get("job_hires")
                                 if job.get("job_hires") is not None
                                 else "Unknown"
+                            )
+
+
+                            st.write(
+                                "**Hire rate:**",
+                                format_hire_rate(job)
                             )
 
 
