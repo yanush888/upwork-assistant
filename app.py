@@ -4255,7 +4255,7 @@ with tab2:
 
 
                                 st.write(
-                                    "**Країна, Місто:**",
+                                    "**Country, City:**",
                                     job.get("client_location") or "Unknown"
                                 )
 
@@ -4577,7 +4577,7 @@ with tab2:
 
 
                             st.write(
-                                "**Країна, Місто:**",
+                                "**Country, City:**",
                                 job.get("client_location") or "Unknown"
                             )
 
