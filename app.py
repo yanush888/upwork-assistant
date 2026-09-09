@@ -191,6 +191,112 @@ def format_job_age(posted_value):
         return "Unknown"
 
 
+
+def generate_manual_cover_letter(job):
+    """
+    Generate a concise, job-specific Upwork cover letter on demand.
+    Portfolio links are never invented; the exact placeholder is preserved.
+    """
+    title = clean_value(job.get("title"))
+    description = clean_value(job.get("description"))
+    budget = clean_value(job.get("budget"))
+    experience_level = clean_value(job.get("experience_level"))
+    skills = clean_value(job.get("skills"))
+    category = clean_value(job.get("category"))
+    proposals = clean_value(job.get("proposals"))
+    interviewing = clean_value(job.get("interviewing"))
+    client_spent = clean_value(job.get("client_spent"))
+    client_hires = clean_value(job.get("client_hires"))
+
+    prompt = f"""
+You are writing an Upwork proposal for Andrew, a freelance specialist in:
+- high-end photo retouching
+- Photoshop
+- Amazon/e-commerce product imagery
+- AI + Photoshop compositing
+- architectural/interior retouching
+- portrait retouching
+
+Profile strengths:
+- Top Rated
+- 100% JSS
+- 5-star work history
+
+JOB:
+Title: {title}
+Category: {category}
+Budget: {budget}
+Experience level: {experience_level}
+Applicants: {proposals}
+Interviewing: {interviewing}
+Client spent: {client_spent}
+Client hires: {client_hires}
+Skills: {skills}
+
+Description:
+{description}
+
+Write a personalized Upwork cover letter using this structure and tone:
+
+Hi,
+
+Your project caught my eye because [specific detail showing genuine interest].
+
+I've done very similar work — here's [INSERT RELEVANT PORTFOLIO LINK].
+The brief was [one concise sentence describing a comparable type of work],
+and the focus was [one concise sentence describing the result/goal without inventing metrics].
+
+For your project, I'd approach it by [brief creative/technical direction tailored to this exact job].
+
+Pricing sentence:
+- If the job is clearly fixed-price, include:
+  "I've scoped this as fixed-price so there are no surprises."
+- If the job is clearly hourly, include one concise sentence with a reasonable hourly rate based on the scope.
+- Never claim fixed-price for an hourly job.
+- Never invent a client name. If unknown, use "Hi,".
+
+Happy to share more examples. What's the best way to connect?
+
+Andrew
+
+IMPORTANT:
+- Keep it natural, concise and confident.
+- Approximately 100-140 words.
+- Do not begin with "I am excited to apply."
+- Do not invent portfolio links.
+- Keep the exact placeholder:
+  [INSERT RELEVANT PORTFOLIO LINK]
+- Do not invent quantified results, named brands, or unsupported past-client claims.
+- Tailor the opening and approach to the actual job description.
+"""
+
+    try:
+        response = client.responses.create(
+            model="gpt-5-mini",
+            input=prompt,
+        )
+
+        cover_letter = getattr(
+            response,
+            "output_text",
+            None
+        )
+
+        if cover_letter:
+            return cover_letter.strip()
+
+        return (
+            "Hi,\n\n"
+            f"Your project caught my eye because of the work around {title}.\n\n"
+            "I've done similar work — here's [INSERT RELEVANT PORTFOLIO LINK].\n\n"
+            "I'd be happy to share more examples and discuss the best approach for your project.\n\n"
+            "Andrew"
+        )
+
+    except Exception as e:
+        return f"Could not generate cover letter: {e}"
+
+
 def extract_number(
     text,
     label
@@ -4569,6 +4675,38 @@ with tab2:
                             current_key
                         )
                     )
+
+
+                    cover_key = (
+                        f"cover_letter_{job.get('id') or job.get('url') or index}"
+                    )
+
+                    if st.button(
+                        "✉️ Generate Cover Letter",
+                        key=f"generate_cover_{job.get('id') or index}",
+                        use_container_width=True,
+                    ):
+                        with st.spinner(
+                            "Generating personalized cover letter..."
+                        ):
+                            st.session_state[
+                                cover_key
+                            ] = generate_manual_cover_letter(
+                                job
+                            )
+
+                    if st.session_state.get(
+                        cover_key
+                    ):
+                        st.text_area(
+                            "Cover Letter",
+                            value=st.session_state[
+                                cover_key
+                            ],
+                            height=260,
+                            key=f"cover_text_{job.get('id') or index}",
+                        )
+
 
 
                     if current_result:
