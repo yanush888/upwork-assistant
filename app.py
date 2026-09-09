@@ -271,7 +271,13 @@ IMPORTANT:
 """
 
     try:
-        response = client.responses.create(
+        # Create the OpenAI client here so this function does not depend
+        # on where the global `client` variable is initialized in Streamlit.
+        cover_client = OpenAI(
+            api_key=OPENAI_API_KEY
+        )
+
+        response = cover_client.responses.create(
             model="gpt-5-mini",
             input=prompt,
         )
