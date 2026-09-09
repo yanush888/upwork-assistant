@@ -1019,15 +1019,40 @@ APPLICATION STRATEGY:
 - recommendation
 
 PROPOSAL:
-Write a personalized Upwork proposal
-of approximately 100-140 words.
+Write a personalized Upwork cover letter using this structure and tone:
 
-Never begin with:
-"I am excited to apply."
+Hi,
 
-Start with the client's actual problem.
+Your project caught my eye because [specific detail showing genuine interest].
 
-Sound natural, concise and confident.
+I've done very similar work — here's [INSERT RELEVANT PORTFOLIO LINK].
+The brief was [one concise sentence describing a comparable type of work],
+and the result was [one concise sentence describing the outcome].
+
+For your project, I'd approach it by [brief creative/technical direction tailored to this exact job].
+
+PRICING SENTENCE:
+- If the job is clearly fixed-price, include:
+  "I've scoped this as fixed-price so there are no surprises."
+- If the job is hourly, include one concise sentence that reflects the RECOMMENDED BID,
+  for example:
+  "Based on the scope, I'd suggest starting at $45/hr."
+- Never claim fixed-price for an hourly job.
+- Never invent a client name. If the client's name is unknown, use "Hi,".
+
+Happy to share more examples. What's the best way to connect?
+
+Andrew
+
+IMPORTANT:
+- Keep the proposal natural, concise and confident.
+- Approximately 100-140 words.
+- Do not begin with "I am excited to apply."
+- Do not invent portfolio links.
+- Keep the exact placeholder:
+  [INSERT RELEVANT PORTFOLIO LINK]
+- Tailor the specific-detail sentence, similar-work sentence and approach sentence
+  to the actual job description.
 """
 
 def analyze_job_with_ai(job):
@@ -2089,21 +2114,58 @@ def telegram_send(text):
 
 def format_alert(result):
     job = result["job"]
+
     title = html.escape(job.get("title") or "Untitled job")
     budget = html.escape(str(job.get("budget") or "Unknown"))
+
     applicants = job.get("proposals")
     applicants = "Unknown" if applicants is None else str(applicants)
+
     spent = html.escape(str(job.get("client_spent") or "Unknown"))
+
     hires = job.get("client_hires")
     hires = "Unknown" if hires is None else str(hires)
+
     bid = html.escape(str(result.get("recommended_bid") or "—"))
     category = html.escape(str(result.get("category") or "—"))
     decision = html.escape(str(result.get("decision") or "—"))
+
     score = int(result.get("opportunity_score") or 0)
     win = int(result.get("win_probability") or 0)
+
     url = html.escape(job.get("url") or "")
-    why = extract_section(result.get("analysis") or "", "WHY YOU CAN WIN", "WHY THIS JOB IS ATTRACTIVE")
-    why = html.escape(why[:450] if why else "Strong fit based on the AI analysis.")
+
+    why = extract_section(
+        result.get("analysis") or "",
+        "WHY YOU CAN WIN",
+        "WHY THIS JOB IS ATTRACTIVE"
+    )
+    why = html.escape(
+        why[:500] if why else "Strong fit based on the AI analysis."
+    )
+
+    proposal = (
+        result.get("proposal")
+        or extract_section(
+            result.get("analysis") or "",
+            "PROPOSAL"
+        )
+        or ""
+    ).strip()
+
+    if not proposal:
+        proposal = (
+            "Hi,\n\n"
+            "Your project caught my eye because the scope aligns closely "
+            "with the kind of image work I handle.\n\n"
+            "I've done very similar work — here's "
+            "[INSERT RELEVANT PORTFOLIO LINK].\n\n"
+            "Happy to share more examples. What's the best way to connect?\n\n"
+            "Andrew"
+        )
+
+    proposal = html.escape(proposal)
+
     lines = [
         f"🔥 <b>UPWORK OPPORTUNITY — {score}/100</b>",
         f"<b>{title}</b>",
@@ -2117,10 +2179,19 @@ def format_alert(result):
         f"🧩 Category: {category}",
         f"📌 Decision: {decision}",
         "",
-        f"<b>Why you can win:</b> {why}"
+        f"<b>Why you can win:</b> {why}",
+        "",
+        "<b>✉️ COVER LETTER</b>",
+        "",
+        proposal,
     ]
+
     if url:
-        lines += ["", f'<a href="{url}">🚀 Open on Upwork</a>']
+        lines += [
+            "",
+            f'<a href="{url}">🚀 Open on Upwork</a>'
+        ]
+
     return "\n".join(lines)
 
 def main():
