@@ -4139,47 +4139,32 @@ with tab2:
                             )
 
 
-                            info1, info2 = (
-                                st.columns(2)
-                            )
+                            info1, info2 = st.columns(2)
 
 
                             with info1:
 
                                 st.write(
                                     "**Budget:**",
-                                    job.get(
-                                        "budget"
-                                    )
-                                    or
-                                    "Unknown"
+                                    job.get("budget") or "Unknown"
                                 )
-
 
                                 st.write(
                                     "**Applicants:**",
-                                    job.get(
-                                        "proposals"
-                                    )
-                                    if
-                                    job.get(
-                                        "proposals"
-                                    )
-                                    is not None
-                                    else
-                                    "Unknown"
+                                    job.get("proposals")
+                                    if job.get("proposals") is not None
+                                    else "Unknown"
                                 )
 
+                                st.write(
+                                    "**Experience:**",
+                                    job.get("experience_level") or "Unknown"
+                                )
 
                                 st.write(
                                     "**Posted:**",
-                                    format_job_age(
-                                        job.get(
-                                            "posted"
-                                        )
-                                    )
+                                    format_job_age(job.get("posted"))
                                 )
-
 
                                 st.write(
                                     "**Last viewed by client:**",
@@ -4188,61 +4173,54 @@ with tab2:
                                     else "Unknown"
                                 )
 
-                                activity_col1, activity_col2 = st.columns(2)
-
-                                with activity_col1:
-                                    st.write(
-                                        "**Hires:**",
-                                        job.get("job_hires")
-                                        if job.get("job_hires") is not None
-                                        else "Unknown"
-                                    )
-                                    st.write(
-                                        "**Interviewing:**",
-                                        job.get("interviewing")
-                                        if job.get("interviewing") is not None
-                                        else "Unknown"
-                                    )
-
-                                with activity_col2:
-                                    st.write(
-                                        "**Invites sent:**",
-                                        job.get("invites")
-                                        if job.get("invites") is not None
-                                        else "Unknown"
-                                    )
-                                    st.write(
-                                        "**Unanswered invites:**",
-                                        job.get("unanswered_invites")
-                                        if job.get("unanswered_invites") is not None
-                                        else "Unknown"
-                                    )
+                                st.write(
+                                    "**Hires:**",
+                                    job.get("job_hires")
+                                    if job.get("job_hires") is not None
+                                    else "Unknown"
+                                )
 
 
                             with info2:
 
                                 st.write(
                                     "**Client spent:**",
-                                    job.get(
-                                        "client_spent"
-                                    )
-                                    or
-                                    "Unknown"
+                                    job.get("client_spent") or "Unknown"
                                 )
-
 
                                 st.write(
                                     "**Client hires:**",
-                                    job.get(
-                                        "client_hires"
-                                    )
-                                    if
-                                    job.get(
-                                        "client_hires"
-                                    )
-                                    is not None
-                                    else
-                                    "Unknown"
+                                    job.get("client_hires")
+                                    if job.get("client_hires") is not None
+                                    else "Unknown"
+                                )
+
+                                st.write(
+                                    "**Client rating:**",
+                                    job.get("client_rating")
+                                    if job.get("client_rating") is not None
+                                    else "Unknown"
+                                )
+
+                                st.write(
+                                    "**Interviewing:**",
+                                    job.get("interviewing")
+                                    if job.get("interviewing") is not None
+                                    else "Unknown"
+                                )
+
+                                st.write(
+                                    "**Invites sent:**",
+                                    job.get("invites")
+                                    if job.get("invites") is not None
+                                    else "Unknown"
+                                )
+
+                                st.write(
+                                    "**Unanswered invites:**",
+                                    job.get("unanswered_invites")
+                                    if job.get("unanswered_invites") is not None
+                                    else "Unknown"
                                 )
 
 
