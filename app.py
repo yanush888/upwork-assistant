@@ -253,13 +253,15 @@ Pricing sentence:
   "I've scoped this as fixed-price so there are no surprises."
 - If the job is clearly hourly, include one concise sentence with a reasonable hourly rate based on the scope.
 - Never claim fixed-price for an hourly job.
-- Never invent a client name. If unknown, use "Hi,".
+- Always start exactly with "Hi,". Never add a client name.
 
 Happy to share more examples. What's the best way to connect?
 
 Andrew
 
 IMPORTANT:
+- The first line must be exactly: Hi,
+- Never put a name after Hi.
 - Keep it natural, concise and confident.
 - Approximately 100-140 words.
 - Do not begin with "I am excited to apply."
@@ -274,7 +276,7 @@ IMPORTANT:
         # Create the OpenAI client here so this function does not depend
         # on where the global `client` variable is initialized in Streamlit.
         cover_client = OpenAI(
-            api_key=OPENAI_API_KEY
+            api_key=st.secrets["OPENAI_API_KEY"]
         )
 
         response = cover_client.responses.create(
