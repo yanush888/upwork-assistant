@@ -1,6 +1,7 @@
 import streamlit as st
 import re
 import requests
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 from openai import OpenAI
 from supabase import create_client
@@ -117,6 +118,77 @@ def clean_value(value):
         return "Unknown"
 
     return value
+
+
+def format_job_age(posted_value):
+    """
+    Convert Upwork publishedDateTime into a human-friendly age:
+    '12 min ago', '2h 18m ago', '1d 4h ago', etc.
+    """
+    if not posted_value:
+        return "Unknown"
+
+    try:
+        raw = str(posted_value).strip()
+
+        # Upwork commonly returns ISO-8601 timestamps ending in Z.
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+
+        posted_dt = datetime.fromisoformat(raw)
+
+        if posted_dt.tzinfo is None:
+            posted_dt = posted_dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        now = datetime.now(timezone.utc)
+        delta = now - posted_dt.astimezone(timezone.utc)
+
+        total_seconds = int(delta.total_seconds())
+
+        if total_seconds < 0:
+            total_seconds = 0
+
+        minutes = total_seconds // 60
+        hours = minutes // 60
+        days = hours // 24
+
+        if minutes < 1:
+            return "Just now"
+
+        if minutes < 60:
+            return f"{minutes} min ago"
+
+        if hours < 24:
+            remaining_minutes = minutes % 60
+
+            if remaining_minutes:
+                return f"{hours}h {remaining_minutes}m ago"
+
+            return f"{hours}h ago"
+
+        remaining_hours = hours % 24
+
+        if days < 7:
+            if remaining_hours:
+                return f"{days}d {remaining_hours}h ago"
+
+            return f"{days}d ago"
+
+        weeks = days // 7
+        remaining_days = days % 7
+
+        if weeks < 5:
+            if remaining_days:
+                return f"{weeks}w {remaining_days}d ago"
+
+            return f"{weeks}w ago"
+
+        return f"{days}d ago"
+
+    except Exception:
+        return "Unknown"
 
 
 def extract_number(
@@ -3951,6 +4023,26 @@ with tab2:
                                     is not None
                                     else
                                     "Unknown"
+                                )
+
+
+                                st.write(
+                                    "**Posted:**",
+                                    format_job_age(
+                                        job.get(
+                                            "posted"
+                                        )
+                                    )
+                                )
+
+
+                                st.write(
+                                    "**Posted:**",
+                                    format_job_age(
+                                        job.get(
+                                            "posted"
+                                        )
+                                    )
                                 )
 
 
