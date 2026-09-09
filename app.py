@@ -4036,16 +4036,6 @@ with tab2:
                                 )
 
 
-                                st.write(
-                                    "**Posted:**",
-                                    format_job_age(
-                                        job.get(
-                                            "posted"
-                                        )
-                                    )
-                                )
-
-
                             with info2:
 
                                 st.write(
@@ -4327,6 +4317,16 @@ with tab2:
                                 is not None
                                 else
                                 "Unknown"
+                            )
+
+
+                            st.write(
+                                "**Posted:**",
+                                format_job_age(
+                                    job.get(
+                                        "posted"
+                                    )
+                                )
                             )
 
 
