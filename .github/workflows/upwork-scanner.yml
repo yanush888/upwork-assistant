@@ -1,18 +1,17 @@
 name: Upwork Opportunity Scanner
 
 on:
-  workflow_dispatch:
-
   schedule:
-    # GitHub cron uses UTC.
-    # We run every hour at minute 5,
-    # while scanner.py itself checks Europe/Kyiv
-    # and proceeds only at 08:00, 12:00, 16:00, 20:00.
-    - cron: "5 * * * *"
+    # GitHub cron is UTC. Run hourly and let scanner.py decide whether
+    # local Kyiv time is 08:00, 11:00, 14:00, 17:00 or 20:00.
+    # This keeps the schedule correct across daylight-saving changes.
+    - cron: '7 * * * *'
+  workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -21,12 +20,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install scanner dependencies
         run: pip install -r requirements-scanner.txt
 
-      - name: Run Upwork scanner
+      - name: Scan Upwork and send Telegram alerts
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -35,12 +34,9 @@ jobs:
           UPWORK_CLIENT_SECRET: ${{ secrets.UPWORK_CLIENT_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run detected — forcing scanner."
-            python scanner.py --force
-          else
-            echo "Scheduled run — scanner will check Kyiv time."
-            python scanner.py
-          fi
+          OPPORTUNITY_THRESHOLD: '80'
+          AI_ANALYZE_TOP: '25'
+          NEW_JOB_ANALYZE_LIMIT: '25'
+          RECOVERY_CANDIDATES: '8'
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+        run: python scanner.py
