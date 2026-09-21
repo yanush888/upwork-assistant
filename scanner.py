@@ -208,6 +208,114 @@ def is_relevant_job(job):
     return relevance_score(job) >= RELEVANCE_MIN_SCORE
 
 
+# =====================================================
+# TARGET FIT FILTER v5
+# =====================================================
+# Stage 2 after broad relevance: only spend full AI analysis on jobs that
+# clearly fit one of the freelancer's commercial image-editing lanes.
+TARGET_LANES = {
+    "amazon_ecommerce": [
+        "amazon listing", "amazon product", "amazon image", "amazon images",
+        "a+ content", "listing image", "listing images", "ecommerce product image",
+        "e-commerce product image", "product listing image", "lifestyle image",
+        "lifestyle images", "packshot", "pack shot",
+    ],
+    "product_retouching": [
+        "product retouch", "product retouching", "product photo retouch",
+        "product image editing", "product photo editing", "photo retouch",
+        "high-end retouch", "high end retouch", "background replacement",
+        "background removal", "color correction", "colour correction",
+    ],
+    "product_compositing_ai": [
+        "product compositing", "product composite", "photoshop compositing",
+        "photo compositing", "image compositing", "ai product image",
+        "ai product photography", "ai + photoshop", "ai photoshop",
+        "product image manipulation",
+    ],
+    "architecture_interior": [
+        "architectural photo", "architectural retouch", "architecture retouch",
+        "interior photo editing", "interior retouch", "real estate photo",
+        "real estate editing", "virtual staging",
+    ],
+    "portrait_beauty": [
+        "portrait retouch", "portrait retouching", "beauty retouch",
+        "beauty retouching", "skin retouch", "headshot retouch",
+        "wedding retouch", "wedding photo retouch",
+    ],
+}
+
+# These are strong indicators that the actual deliverable belongs to another
+# discipline. They are rejected even if the description casually mentions
+# Photoshop/AI, unless a target-lane phrase is explicit in the title.
+TARGET_FIT_BLOCKERS = [
+    "kdp", "book interior", "book cover", "paperback", "hardcover",
+    "vector recreation", "vector illustration", "vector art",
+    "photoshop tutor", "photoshop teacher", "photoshop instructor",
+    "3d architect", "3d architecture", "3d modeling", "3d modelling",
+    "ai character", "character creation", "character design",
+    "video creation", "video creator", "video editor", "video editing",
+    "short videos", "reels", "tiktok video", "youtube video",
+    "fashion designer", "textile designer", "print designer",
+]
+
+TARGET_TITLE_SIGNALS = sorted({
+    phrase
+    for phrases in TARGET_LANES.values()
+    for phrase in phrases
+})
+
+
+def target_fit_details(job):
+    title = str(job.get("title") or "").lower()
+    text = job_search_text(job)
+
+    lane_hits = {}
+    for lane, phrases in TARGET_LANES.items():
+        hits = [phrase for phrase in phrases if phrase in text]
+        if hits:
+            lane_hits[lane] = hits
+
+    title_hits = [phrase for phrase in TARGET_TITLE_SIGNALS if phrase in title]
+    blockers = [phrase for phrase in TARGET_FIT_BLOCKERS if phrase in title]
+
+    # Require a genuine target lane. Description/skills can establish fit, but
+    # title evidence gets a substantial bonus because it reflects the primary deliverable.
+    score = 0
+    for hits in lane_hits.values():
+        score += min(12, 4 * len(hits))
+    score += min(18, 6 * len(title_hits))
+
+    if blockers and not title_hits:
+        score -= 30
+
+    best_lane = None
+    if lane_hits:
+        best_lane = max(lane_hits, key=lambda lane: len(lane_hits[lane]))
+
+    return {
+        "score": score,
+        "lane": best_lane,
+        "lane_hits": lane_hits,
+        "title_hits": title_hits,
+        "blockers": blockers,
+    }
+
+
+def is_target_fit_job(job):
+    details = target_fit_details(job)
+    job["target_fit_score"] = details["score"]
+    job["target_lane"] = details["lane"]
+
+    if details["blockers"] and not details["title_hits"]:
+        return False
+
+    # At least one commercial target lane must be present.
+    if not details["lane_hits"]:
+        return False
+
+    return details["score"] >= 4
+
+
 UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql"
 
@@ -1313,7 +1421,8 @@ def smart_search_upwork_jobs(
             )
 
     jobs = []
-    filtered_out = 0
+    relevance_filtered_out = 0
+    target_fit_filtered_out = 0
 
     for node in unique_nodes.values():
 
@@ -1323,8 +1432,15 @@ def smart_search_upwork_jobs(
             job
         )
 
+        # Stage 1: broad photo/image-editing relevance.
         if not is_relevant_job(job):
-            filtered_out += 1
+            relevance_filtered_out += 1
+            continue
+
+        # Stage 2 (v5): commercial target fit. This prevents generic Photoshop,
+        # AI, video, 3D, book-design and tutoring jobs from consuming AI analysis.
+        if not is_target_fit_job(job):
+            target_fit_filtered_out += 1
             continue
 
         job["quick_fit"] = calculate_quick_fit(
@@ -1343,8 +1459,12 @@ def smart_search_upwork_jobs(
     )
 
     print(
-        f"Relevance filter: kept {len(jobs)} jobs; "
-        f"removed {filtered_out} unrelated jobs."
+        f"Relevance filter: kept {len(jobs) + target_fit_filtered_out} jobs; "
+        f"removed {relevance_filtered_out} unrelated jobs."
+    )
+    print(
+        f"Target Fit v5: kept {len(jobs)} jobs; "
+        f"removed {target_fit_filtered_out} adjacent/off-target jobs."
     )
 
     return jobs, errors
