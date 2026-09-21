@@ -3,7 +3,7 @@ import sys
 import re
 import html
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import requests
@@ -24,10 +24,17 @@ SMART_SEARCH_QUERIES = [
     "high end photo retouching"
 ]
 SMART_SEARCH_PER_QUERY = int(os.getenv("SMART_SEARCH_PER_QUERY", "20"))
-AI_ANALYZE_TOP = int(os.getenv("AI_ANALYZE_TOP", "15"))
+AI_ANALYZE_TOP = int(os.getenv("AI_ANALYZE_TOP", "25"))
 OPPORTUNITY_THRESHOLD = int(os.getenv("OPPORTUNITY_THRESHOLD", "80"))
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
-SCAN_HOURS = {8, 12, 16, 20}
+SCAN_HOURS = {8, 11, 14, 17, 20}
+
+# Incremental scanner settings.
+# Normal scans prioritize jobs we have never seen before.
+# The 20:00 Kyiv run also performs a recovery pass over older jobs.
+RECOVERY_SCAN_HOUR = 20
+RECOVERY_CANDIDATES = int(os.getenv("RECOVERY_CANDIDATES", "8"))
+NEW_JOB_ANALYZE_LIMIT = int(os.getenv("NEW_JOB_ANALYZE_LIMIT", str(AI_ANALYZE_TOP)))
 
 STRONG_KEYWORDS = [
     "photoshop",
@@ -2024,11 +2031,278 @@ def calculate_quick_fit(job):
         min(100, score)
     )
 
+
+def parse_job_posted_datetime(job):
+    value = job.get("posted")
+
+    if not value:
+        return None
+
+    try:
+        raw = str(value).strip()
+
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+
+        dt = datetime.fromisoformat(raw)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(timezone.utc)
+
+    except Exception:
+        return None
+
+
+def job_age_hours(job):
+    posted = parse_job_posted_datetime(job)
+
+    if posted is None:
+        return 999.0
+
+    age = (
+        datetime.now(timezone.utc) - posted
+    ).total_seconds() / 3600.0
+
+    return max(0.0, age)
+
+
+def freshness_score(job):
+    """
+    Fresh jobs receive priority before expensive AI analysis.
+    """
+    age = job_age_hours(job)
+
+    if age <= 0.5:
+        return 100
+    if age <= 1:
+        return 95
+    if age <= 2:
+        return 90
+    if age <= 4:
+        return 80
+    if age <= 8:
+        return 60
+    if age <= 12:
+        return 40
+    if age <= 24:
+        return 20
+    return 5
+
+
+def pre_score(job):
+    """
+    Cheap deterministic score used only to decide which jobs deserve
+    full AI analysis first.
+
+    45% relevance + 30% freshness + 15% client quality
+    + 10% competition.
+    """
+    relevance = max(
+        0,
+        min(
+            100,
+            float(job.get("relevance_score") or 0) * 10
+        )
+    )
+
+    freshness = freshness_score(job)
+
+    client_quality = 50.0
+
+    if job.get("payment_verified"):
+        client_quality += 15
+
+    try:
+        spent = float(job.get("client_spent_raw") or 0)
+        if spent >= 10000:
+            client_quality += 20
+        elif spent >= 1000:
+            client_quality += 10
+    except Exception:
+        pass
+
+    try:
+        hires = float(job.get("client_hires") or 0)
+        if hires >= 10:
+            client_quality += 15
+        elif hires >= 3:
+            client_quality += 8
+    except Exception:
+        pass
+
+    client_quality = min(100, client_quality)
+
+    competition = 70.0
+
+    try:
+        applicants = float(job.get("proposals") or 0)
+        if applicants <= 5:
+            competition = 100
+        elif applicants <= 10:
+            competition = 90
+        elif applicants <= 20:
+            competition = 75
+        elif applicants <= 30:
+            competition = 55
+        elif applicants <= 50:
+            competition = 35
+        else:
+            competition = 15
+    except Exception:
+        pass
+
+    return round(
+        relevance * 0.45
+        + freshness * 0.30
+        + client_quality * 0.15
+        + competition * 0.10,
+        1
+    )
+
+
+def state_key(job):
+    return alert_key(job)
+
+
+def load_scan_states(job_keys):
+    """
+    Load previously seen jobs in one query.
+    """
+    if not job_keys:
+        return {}
+
+    response = (
+        supabase.table("job_scan_state")
+        .select(
+            "upwork_job_id,first_seen_at,first_analyzed_at,"
+            "alerted_at,last_seen_at,posted_at,pre_score,"
+            "last_opportunity_score"
+        )
+        .in_("upwork_job_id", job_keys)
+        .execute()
+    )
+
+    return {
+        row["upwork_job_id"]: row
+        for row in (response.data or [])
+    }
+
+
+def upsert_seen_state(job, score, existing=None):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    key = state_key(job)
+
+    payload = {
+        "upwork_job_id": key,
+        "job_url": job.get("url") or "",
+        "job_title": job.get("title") or "",
+        "last_seen_at": now_iso,
+        "posted_at": job.get("posted"),
+        "pre_score": float(score),
+    }
+
+    if not existing:
+        payload["first_seen_at"] = now_iso
+
+    supabase.table("job_scan_state").upsert(
+        payload,
+        on_conflict="upwork_job_id"
+    ).execute()
+
+
+def mark_analyzed_state(job, result):
+    supabase.table("job_scan_state").upsert(
+        {
+            "upwork_job_id": state_key(job),
+            "job_url": job.get("url") or "",
+            "job_title": job.get("title") or "",
+            "first_analyzed_at": datetime.now(timezone.utc).isoformat(),
+            "last_opportunity_score": int(
+                result.get("opportunity_score") or 0
+            ),
+        },
+        on_conflict="upwork_job_id"
+    ).execute()
+
+
+def mark_alerted_state(job):
+    supabase.table("job_scan_state").upsert(
+        {
+            "upwork_job_id": state_key(job),
+            "alerted_at": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="upwork_job_id"
+    ).execute()
+
+
+def choose_incremental_candidates(jobs, states, now):
+    """
+    Normal scans:
+      - analyze NEW jobs first
+      - freshness is part of the pre-score
+
+    20:00 recovery scan:
+      - also retry a small number of previously seen but never analyzed jobs
+        so promising jobs cannot remain permanently buried below Top N.
+    """
+    new_jobs = []
+    recovery_jobs = []
+
+    for job in jobs:
+        key = state_key(job)
+        state = states.get(key)
+        job["freshness_score"] = freshness_score(job)
+        job["pre_score"] = pre_score(job)
+
+        if not state:
+            new_jobs.append(job)
+        elif not state.get("first_analyzed_at"):
+            recovery_jobs.append(job)
+
+    new_jobs.sort(
+        key=lambda j: (
+            j.get("pre_score", 0),
+            j.get("freshness_score", 0),
+            j.get("quick_fit", 0),
+        ),
+        reverse=True,
+    )
+
+    recovery_jobs.sort(
+        key=lambda j: (
+            j.get("pre_score", 0),
+            j.get("quick_fit", 0),
+        ),
+        reverse=True,
+    )
+
+    candidates = new_jobs[:NEW_JOB_ANALYZE_LIMIT]
+
+    if now.hour == RECOVERY_SCAN_HOUR or os.getenv("FORCE_RECOVERY", "0") == "1":
+        remaining = max(
+            0,
+            AI_ANALYZE_TOP - len(candidates)
+        )
+
+        recovery_limit = min(
+            RECOVERY_CANDIDATES,
+            remaining
+        )
+
+        candidates.extend(
+            recovery_jobs[:recovery_limit]
+        )
+
+    return candidates, new_jobs, recovery_jobs
+
+
 def scheduled_slot_now(force=False):
     """
     Return the current Kyiv time and scanner slot key.
 
-    Automatic runs execute only at 08:00, 12:00, 16:00 and 20:00
+    Automatic runs execute only at 08:00, 11:00, 14:00, 17:00 and 20:00
     in the Europe/Kyiv timezone.
 
     Manual runs can bypass the schedule with:
@@ -2228,18 +2502,88 @@ def main():
         for err in errors:
             print(" -", err)
 
-    candidates = jobs[:AI_ANALYZE_TOP]
-    print(f"Found {len(jobs)} relevant unique jobs; analyzing top {len(candidates)}.")
+    job_keys = [
+        state_key(job)
+        for job in jobs
+    ]
+
+    states = load_scan_states(
+        job_keys
+    )
+
+    # Record first_seen_at / last_seen_at / pre_score for every relevant job.
+    for job in jobs:
+        score = pre_score(job)
+        job["freshness_score"] = freshness_score(job)
+        job["pre_score"] = score
+
+        try:
+            upsert_seen_state(
+                job,
+                score,
+                states.get(state_key(job))
+            )
+        except Exception as exc:
+            print(
+                f"State save warning for {job.get('title')}: {exc}"
+            )
+
+    candidates, new_jobs, recovery_jobs = choose_incremental_candidates(
+        jobs,
+        states,
+        now
+    )
+
+    print(
+        f"Found {len(jobs)} relevant unique jobs; "
+        f"{len(new_jobs)} NEW; "
+        f"{len(recovery_jobs)} previously seen but not analyzed."
+    )
+
+    if now.hour == RECOVERY_SCAN_HOUR and not force_run:
+        print(
+            f"20:00 recovery scan enabled; "
+            f"analyzing up to {RECOVERY_CANDIDATES} older missed candidates "
+            f"in addition to new jobs."
+        )
+
+    print(
+        f"Full AI analysis candidates: {len(candidates)}."
+    )
 
     strong = []
+
     for i, job in enumerate(candidates, start=1):
         try:
-            print(f"Analyzing {i}/{len(candidates)}: {job.get('title')}")
+            print(
+                f"Analyzing {i}/{len(candidates)} "
+                f"[age={job_age_hours(job):.1f}h, "
+                f"fresh={job.get('freshness_score')}, "
+                f"pre={job.get('pre_score')}]: "
+                f"{job.get('title')}"
+            )
+
             result = analyze_job_with_ai(job)
-            if int(result.get("opportunity_score") or 0) >= OPPORTUNITY_THRESHOLD:
+
+            try:
+                mark_analyzed_state(
+                    job,
+                    result
+                )
+            except Exception as exc:
+                print(
+                    f"Analysis state warning for {job.get('title')}: {exc}"
+                )
+
+            if int(
+                result.get("opportunity_score") or 0
+            ) >= OPPORTUNITY_THRESHOLD:
                 strong.append(result)
+
         except Exception as exc:
-            print(f"AI analysis failed for {job.get('title')}: {exc}")
+            print(
+                f"AI analysis failed for {job.get('title')}: {exc}"
+            )
 
     new_alerts = [r for r in strong if not was_alerted(r["job"])]
     new_alerts.sort(key=lambda r: r.get("opportunity_score", 0), reverse=True)
@@ -2248,6 +2592,7 @@ def main():
     for result in new_alerts:
         telegram_send(format_alert(result))
         save_alert(result["job"], result)
+        mark_alerted_state(result["job"])
         sent += 1
 
     mark_run(slot_key, jobs_found=len(jobs), alerts_sent=sent)
