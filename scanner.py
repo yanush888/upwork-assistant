@@ -70,213 +70,139 @@ STRONG_KEYWORDS = [
 
 
 # =====================================================
-# RELEVANCE FILTER
+# RELEVANCE FILTER v4
 # =====================================================
+# Goal: keep image-editing / retouching opportunities and reject adjacent
+# disciplines that only happen to mention Photoshop, AI, ecommerce, etc.
 
 RELEVANCE_KEYWORDS = [
-    "amazon listing",
-    "amazon product",
-    "amazon images",
-    "amazon image",
-    "a+ content",
-    "e-commerce",
-    "ecommerce",
-    "product image",
-    "product images",
-    "product photo",
-    "product photos",
-    "product photography",
-    "product retouch",
-    "product retouching",
-    "product editing",
-    "listing image",
-    "listing images",
-    "lifestyle image",
-    "lifestyle images",
-    "packshot",
-    "pack shot",
-    "photo retouch",
-    "photo retouching",
-    "high-end retouch",
-    "high end retouch",
-    "photo editing",
-    "image editing",
-    "photoshop",
-    "compositing",
-    "composite",
-    "background replacement",
-    "background removal",
-    "image manipulation",
-    "photo manipulation",
-    "lightroom",
-    "ai image",
-    "ai images",
-    "ai photography",
-    "ai product photography",
-    "generative ai",
-    "ai + photoshop",
-    "ai photoshop",
-    "photorealistic ai",
-    "architectural photo",
-    "architectural photography",
-    "architectural retouch",
-    "architecture retouch",
-    "interior photo",
-    "interior photography",
-    "interior retouch",
-    "real estate photo",
-    "real estate photography",
-    "real estate editing",
-    "virtual staging",
-    "portrait retouch",
-    "portrait retouching",
-    "beauty retouch",
-    "beauty retouching",
-    "skin retouch",
+    "amazon listing", "amazon product", "amazon images", "amazon image",
+    "a+ content", "e-commerce", "ecommerce", "product image", "product images",
+    "product photo", "product photos", "product retouch", "product retouching",
+    "product editing", "listing image", "listing images", "lifestyle image",
+    "lifestyle images", "packshot", "pack shot", "photo retouch", "photo retouching",
+    "high-end retouch", "high end retouch", "photo editing", "image editing",
+    "photoshop", "compositing", "composite", "background replacement",
+    "background removal", "image manipulation", "photo manipulation", "lightroom",
+    "ai image", "ai images", "ai photography", "ai product photography",
+    "generative ai", "ai + photoshop", "ai photoshop", "photorealistic ai",
+    "architectural photo", "architectural retouch", "architecture retouch",
+    "interior photo", "interior retouch", "real estate photo", "real estate editing",
+    "virtual staging", "portrait retouch", "portrait retouching", "beauty retouch",
+    "beauty retouching", "skin retouch",
 ]
 
 GENERIC_VISUAL_KEYWORDS = [
-    "retouch",
-    "retouching",
-    "photoshop",
-    "photo editor",
-    "photo editing",
-    "image editor",
-    "image editing",
-    "photographer",
-    "photography",
-    "compositing",
-    "lightroom",
+    "retouch", "retouching", "photoshop", "photo editor", "photo editing",
+    "image editor", "image editing", "compositing", "lightroom",
 ]
 
-NEGATIVE_KEYWORDS = [
-    "web developer",
-    "web development",
-    "shopify developer",
-    "wordpress developer",
-    "frontend developer",
-    "front-end developer",
-    "backend developer",
-    "back-end developer",
-    "full stack developer",
-    "full-stack developer",
-    "ui/ux",
-    "ux/ui",
-    "ui designer",
-    "ux designer",
-    "logo design",
-    "logo designer",
-    "brand identity",
-    "branding designer",
-    "illustrator",
-    "illustration",
-    "social media manager",
-    "social media marketing",
-    "meta ads",
-    "facebook ads",
-    "google ads",
-    "seo",
-    "email marketing",
-    "copywriter",
-    "copywriting",
-    "content writer",
-    "video editor",
-    "video editing",
-    "motion graphics",
-    "animation",
-    "3d developer",
-    "software developer",
-    "mobile app developer",
+# These roles are outside this scanner's photo/image-editing lane.  A job can
+# survive only when its TITLE also contains an explicit editing/retouching signal.
+OFF_TARGET_TITLE_KEYWORDS = [
+    "web designer", "web developer", "website designer", "website developer",
+    "shopify designer", "shopify developer", "wordpress", "frontend", "front-end",
+    "backend", "back-end", "full stack", "full-stack", "ui/ux", "ux/ui",
+    "ui designer", "ux designer", "graphic designer", "graphic design",
+    "visual content creator", "creative designer", "brand designer", "branding designer",
+    "logo designer", "logo design", "illustrator", "illustration",
+    "social media", "social media manager", "social media marketing", "meta ads",
+    "facebook ads", "google ads", "digital marketing", "marketing manager", "seo",
+    "email marketing", "copywriter", "copywriting", "content writer",
+    "video editor", "video editing", "video creator", "video producer",
+    "motion designer", "motion graphics", "animation", "animator", "youtube editor",
+    "thumbnail designer", "thumbnail design", "3d artist", "3d designer",
+    "3d developer", "software developer", "mobile app developer",
 ]
 
-HARD_NEGATIVE_TITLE_KEYWORDS = [
-    "web designer", "web developer", "shopify designer", "shopify developer",
-    "visual content creator", "illustrator", "ui/ux", "ux/ui",
-    "social media", "meta ads", "facebook ads", "google ads", "video editor",
-    "video editing", "motion designer", "motion graphics",
-]
-
-HARD_REJECT_TITLE_PATTERNS = [
-    ("graphic designer", "video editor"),
-    ("graphic designer", "video editing"),
-    ("graphic design", "video editor"),
-    ("graphic design", "video editing"),
+# Explicit TITLE signals showing that the actual deliverable is image editing.
+TITLE_EDITING_SIGNALS = [
+    "retouch", "retouching", "photo edit", "photo editor", "image edit", "image editor",
+    "product image", "product photo retouch", "product retouch", "photoshop retouch",
+    "photoshop editing", "photoshop compositing", "photo compositing", "image compositing",
+    "background replacement", "background removal", "color correction", "colour correction",
+    "lightroom edit", "architectural retouch", "interior retouch", "real estate photo edit",
+    "portrait retouch", "beauty retouch", "skin retouch", "ai image", "ai product image",
 ]
 
 CORE_PHOTO_SIGNALS = [
     "retouch", "retouching", "photo retouch", "photo editing", "photo editor",
-    "product photo", "product image", "product retouch", "amazon listing",
+    "image editing", "image editor", "product image", "product retouch", "amazon listing",
     "amazon product", "listing image", "lifestyle image", "photoshop compositing",
-    "photo compositing", "image compositing", "background replacement",
-    "ai image", "ai photography", "architectural photo", "interior photo",
-    "real estate photo", "portrait retouch", "beauty retouch",
+    "photo compositing", "image compositing", "background replacement", "background removal",
+    "ai image", "ai product", "architectural retouch", "interior retouch",
+    "real estate editing", "portrait retouch", "beauty retouch", "skin retouch",
 ]
 
-RELEVANCE_MIN_SCORE = int(
-    os.getenv("RELEVANCE_MIN_SCORE", "5")
-)
+# Photography-only jobs are intentionally excluded from this scanner unless the
+# title clearly asks for editing/retouching/compositing as well.
+PHOTOGRAPHY_ONLY_TITLE_KEYWORDS = [
+    "photographer", "photography", "photo shoot", "photoshoot", "studio shoot",
+    "event photographer", "wedding photographer", "product photographer",
+]
+
+RELEVANCE_MIN_SCORE = int(os.getenv("RELEVANCE_MIN_SCORE", "6"))
 
 
 def job_search_text(job):
     return (
-        (
-            str(job.get("title") or "")
-            + " "
-            + str(job.get("description") or "")
-            + " "
-            + " ".join(job.get("skills") or [])
-        )
-        .lower()
-    )
+        str(job.get("title") or "")
+        + " "
+        + str(job.get("description") or "")
+        + " "
+        + " ".join(job.get("skills") or [])
+    ).lower()
 
 
 def relevance_score(job):
     text = job_search_text(job)
     title = str(job.get("title") or "").lower()
+
     strong_matches = [k for k in RELEVANCE_KEYWORDS if k in text]
     generic_matches = [k for k in GENERIC_VISUAL_KEYWORDS if k in text]
-    negative_matches = [k for k in NEGATIVE_KEYWORDS if k in text]
     core_matches = [k for k in CORE_PHOTO_SIGNALS if k in text]
-    hard_title_matches = [k for k in HARD_NEGATIVE_TITLE_KEYWORDS if k in title]
+    title_edit_matches = [k for k in TITLE_EDITING_SIGNALS if k in title]
+    off_target_matches = [k for k in OFF_TARGET_TITLE_KEYWORDS if k in title]
+    photography_only = [k for k in PHOTOGRAPHY_ONLY_TITLE_KEYWORDS if k in title]
 
-    score = min(len(strong_matches) * 3, 15) + min(len(generic_matches), 3)
+    score = min(len(strong_matches) * 3, 18) + min(len(generic_matches), 3)
+
     if core_matches:
-        score += 4
-    if hard_title_matches:
-        score -= 12
-        if core_matches:
-            score += 7
-    if negative_matches and not core_matches:
-        score -= 8
-    if not core_matches and any(k in text for k in [
-        "developer", "development", "seo", "marketing", "ads",
-        "copywriter", "copywriting", "branding", "brand identity"
-    ]):
-        score -= 5
+        score += 5
+    if title_edit_matches:
+        score += 6
+    if off_target_matches:
+        score -= 18
+    if photography_only and not title_edit_matches:
+        score -= 15
+
+    # Broad ecommerce/AI mentions are not enough by themselves.
+    if not core_matches and not title_edit_matches:
+        score -= 6
+
     return score
 
 
 def is_relevant_job(job):
-    text = job_search_text(job)
     title = str(job.get("title") or "").lower()
+    text = job_search_text(job)
 
-    core_matches = [
-        k for k in CORE_PHOTO_SIGNALS
-        if k in text
-    ]
+    title_edit_matches = [k for k in TITLE_EDITING_SIGNALS if k in title]
+    off_target_matches = [k for k in OFF_TARGET_TITLE_KEYWORDS if k in title]
+    photography_only = [k for k in PHOTOGRAPHY_ONLY_TITLE_KEYWORDS if k in title]
+    core_matches = [k for k in CORE_PHOTO_SIGNALS if k in text]
 
-    hard_title_matches = [
-        k for k in HARD_NEGATIVE_TITLE_KEYWORDS
-        if k in title
-    ]
+    # v4 hard gate: adjacent professions do not pass just because their
+    # descriptions mention Photoshop, AI, Amazon or ecommerce.
+    if off_target_matches and not title_edit_matches:
+        return False
 
-    # Reject clear mixed graphic-design/video roles even when the
-    # description happens to mention Photoshop or AI.
-    for pattern in HARD_REJECT_TITLE_PATTERNS:
-        if all(part in title for part in pattern):
-            return False
+    # Exclude jobs whose primary deliverable is taking photographs rather than editing them.
+    if photography_only and not title_edit_matches:
+        return False
 
-    if hard_title_matches and not core_matches:
+    # Require at least one real image-editing/retouching signal somewhere in the job.
+    if not core_matches and not title_edit_matches:
         return False
 
     return relevance_score(job) >= RELEVANCE_MIN_SCORE
