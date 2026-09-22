@@ -209,7 +209,7 @@ def is_relevant_job(job):
 
 
 # =====================================================
-# TARGET FIT FILTER v5
+# TARGET FIT FILTER v5.1
 # =====================================================
 # Stage 2 after broad relevance: only spend full AI analysis on jobs that
 # clearly fit one of the freelancer's commercial image-editing lanes.
@@ -264,6 +264,24 @@ TARGET_TITLE_SIGNALS = sorted({
     for phrase in phrases
 })
 
+# v5.1: marketplace/platform words are context, not proof of image work.
+# A generic Amazon/e-commerce/Shopify role must also contain an explicit
+# image/retouching/compositing deliverable before it can reach AI analysis.
+GENERIC_COMMERCE_ROLE_SIGNALS = [
+    "virtual assistant", "ecommerce virtual assistant", "e-commerce virtual assistant",
+    "amazon virtual assistant", "shopify virtual assistant", "store manager",
+    "ecommerce manager", "e-commerce manager", "amazon manager", "shopify manager",
+    "listing specialist", "product listing specialist", "marketplace specialist",
+    "product uploader", "listing uploader", "catalog manager", "catalog specialist",
+]
+
+IMAGE_DELIVERABLE_SIGNALS = [
+    "image", "images", "photo", "photos", "photography", "retouch", "retouching",
+    "photoshop", "compositing", "composite", "background removal",
+    "background replacement", "color correction", "colour correction",
+    "packshot", "pack shot", "lifestyle image", "listing image", "a+ content",
+]
+
 
 def target_fit_details(job):
     title = str(job.get("title") or "").lower()
@@ -277,6 +295,12 @@ def target_fit_details(job):
 
     title_hits = [phrase for phrase in TARGET_TITLE_SIGNALS if phrase in title]
     blockers = [phrase for phrase in TARGET_FIT_BLOCKERS if phrase in title]
+    generic_commerce_role = any(
+        phrase in title for phrase in GENERIC_COMMERCE_ROLE_SIGNALS
+    )
+    title_has_image_deliverable = any(
+        phrase in title for phrase in IMAGE_DELIVERABLE_SIGNALS
+    )
 
     # Require a genuine target lane. Description/skills can establish fit, but
     # title evidence gets a substantial bonus because it reflects the primary deliverable.
@@ -298,6 +322,8 @@ def target_fit_details(job):
         "lane_hits": lane_hits,
         "title_hits": title_hits,
         "blockers": blockers,
+        "generic_commerce_role": generic_commerce_role,
+        "title_has_image_deliverable": title_has_image_deliverable,
     }
 
 
@@ -307,6 +333,15 @@ def is_target_fit_job(job):
     job["target_lane"] = details["lane"]
 
     if details["blockers"] and not details["title_hits"]:
+        return False
+
+    # v5.1: Amazon/e-commerce/Shopify operational roles are not image jobs just
+    # because their descriptions mention listings, lifestyle images or A+ content.
+    # The title itself must identify an image/photo/retouching deliverable.
+    if (
+        details["generic_commerce_role"]
+        and not details["title_has_image_deliverable"]
+    ):
         return False
 
     # At least one commercial target lane must be present.
@@ -1437,7 +1472,7 @@ def smart_search_upwork_jobs(
             relevance_filtered_out += 1
             continue
 
-        # Stage 2 (v5): commercial target fit. This prevents generic Photoshop,
+        # Stage 2 (v5.1): commercial target fit. This prevents generic Photoshop,
         # AI, video, 3D, book-design and tutoring jobs from consuming AI analysis.
         if not is_target_fit_job(job):
             target_fit_filtered_out += 1
@@ -1463,7 +1498,7 @@ def smart_search_upwork_jobs(
         f"removed {relevance_filtered_out} unrelated jobs."
     )
     print(
-        f"Target Fit v5: kept {len(jobs)} jobs; "
+        f"Target Fit v5.1: kept {len(jobs)} jobs; "
         f"removed {target_fit_filtered_out} adjacent/off-target jobs."
     )
 
