@@ -34,7 +34,7 @@ jobs:
           UPWORK_CLIENT_SECRET: ${{ secrets.UPWORK_CLIENT_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          OPPORTUNITY_THRESHOLD: '80'
+          OPPORTUNITY_THRESHOLD: '75'
           AI_ANALYZE_TOP: '25'
           NEW_JOB_ANALYZE_LIMIT: '25'
           RECOVERY_CANDIDATES: '8'
