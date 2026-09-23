@@ -25,7 +25,7 @@ SMART_SEARCH_QUERIES = [
 ]
 SMART_SEARCH_PER_QUERY = int(os.getenv("SMART_SEARCH_PER_QUERY", "20"))
 AI_ANALYZE_TOP = int(os.getenv("AI_ANALYZE_TOP", "25"))
-OPPORTUNITY_THRESHOLD = int(os.getenv("OPPORTUNITY_THRESHOLD", "80"))
+OPPORTUNITY_THRESHOLD = int(os.getenv("OPPORTUNITY_THRESHOLD", "75"))
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCAN_HOURS = {8, 11, 14, 17, 20}
 
@@ -2633,7 +2633,6 @@ def main():
     )
 
     strong = []
-    analyzed_results = []
 
     for i, job in enumerate(candidates, start=1):
         try:
@@ -2646,18 +2645,6 @@ def main():
             )
 
             result = analyze_job_with_ai(job)
-            analyzed_results.append(result)
-
-            print(
-                "  DIAGNOSTIC | "
-                f"Opportunity={int(result.get('opportunity_score') or 0)}/100 | "
-                f"Skill={int(result.get('skill_match') or 0)}/100 | "
-                f"Client={int(result.get('client_quality') or 0)}/100 | "
-                f"Budget={int(result.get('budget_quality') or 0)}/100 | "
-                f"Competition={int(result.get('competition_score') or 0)}/100 | "
-                f"Win={int(result.get('win_probability') or 0)}/100 | "
-                f"Decision={result.get('decision') or '—'}"
-            )
 
             try:
                 mark_analyzed_state(
@@ -2678,21 +2665,6 @@ def main():
             print(
                 f"AI analysis failed for {job.get('title')}: {exc}"
             )
-
-    if analyzed_results:
-        scores = [int(r.get("opportunity_score") or 0) for r in analyzed_results]
-        print("")
-        print("=== DIAGNOSTIC SCORE SUMMARY ===")
-        print(f"Analyzed successfully: {len(scores)}")
-        print(f"80+: {sum(s >= 80 for s in scores)}")
-        print(f"75-79: {sum(75 <= s <= 79 for s in scores)}")
-        print(f"70-74: {sum(70 <= s <= 74 for s in scores)}")
-        print(f"<70: {sum(s < 70 for s in scores)}")
-        print(f"Highest score: {max(scores)}/100")
-        print(f"Average score: {sum(scores) / len(scores):.1f}/100")
-        print("================================")
-    else:
-        print("Diagnostic summary: no jobs were successfully AI-analyzed.")
 
     new_alerts = [r for r in strong if not was_alerted(r["job"])]
     new_alerts.sort(key=lambda r: r.get("opportunity_score", 0), reverse=True)
