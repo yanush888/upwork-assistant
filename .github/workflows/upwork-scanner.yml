@@ -2,13 +2,15 @@ name: Upwork Opportunity Scanner
 
 on:
   schedule:
-    # GitHub cron uses UTC.
-    # Run every 15 minutes. scanner.py decides whether the current
-    # Kyiv-time slot (08:00, 11:00, 14:00, 17:00, 20:00) still needs to run.
+    # GitHub Actions cron uses UTC.
     #
-    # This improves reliability when GitHub delays scheduled workflows
-    # and remains correct across Kyiv daylight-saving changes.
-    - cron: '*/15 * * * *'
+    # We trigger at both possible UTC hours for Kyiv:
+    # Winter (UTC+2): 06, 09, 12, 15, 18
+    # Summer (UTC+3): 05, 08, 11, 14, 17
+    #
+    # scanner.py checks Europe/Kyiv local time and only performs
+    # a real scan at 08:00, 11:00, 14:00, 17:00, 20:00.
+    - cron: '0 5,6,8,9,11,12,14,15,17,18 * * *'
 
   workflow_dispatch:
 
