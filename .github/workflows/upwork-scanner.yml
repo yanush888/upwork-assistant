@@ -5,7 +5,7 @@ on:
     # GitHub cron is UTC. Run hourly and let scanner.py decide whether
     # local Kyiv time is 08:00, 11:00, 14:00, 17:00 or 20:00.
     # This keeps the schedule correct across daylight-saving changes.
-    - cron: '7 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
