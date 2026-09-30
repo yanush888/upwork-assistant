@@ -2402,10 +2402,19 @@ def scheduled_slot_now(force=False):
     if force_run:
         return now, f"manual-{now:%Y%m%d-%H%M%S}"
 
-    if now.hour not in SCAN_HOURS:
+    # GitHub Actions scheduled runs can start several minutes late.
+    # Match the run to the most recent scheduled Kyiv slot.
+    today_slots = [
+        now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        for hour in sorted(SCAN_HOURS)
+    ]
+    eligible_slots = [slot for slot in today_slots if slot <= now]
+
+    if not eligible_slots:
         return now, None
 
-    return now, f"{now:%Y%m%d}-{now.hour:02d}"
+    slot = eligible_slots[-1]
+    return now, f"{slot:%Y%m%d}-{slot.hour:02d}"
 
 def already_ran(slot_key):
     response = (
