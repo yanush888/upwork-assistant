@@ -2,15 +2,10 @@ name: Upwork Opportunity Scanner
 
 on:
   schedule:
-    # GitHub Actions cron uses UTC.
-    #
-    # We trigger at both possible UTC hours for Kyiv:
-    # Winter (UTC+2): 06, 09, 12, 15, 18
-    # Summer (UTC+3): 05, 08, 11, 14, 17
-    #
-    # scanner.py checks Europe/Kyiv local time and only performs
-    # a real scan at 08:00, 11:00, 14:00, 17:00, 20:00.
-    - cron: '0 5,6,8,9,11,12,14,15,17,18 * * *'
+    # Run every 3 hours from 08:00 to 20:00 Kyiv time.
+    # :07 is used instead of :00 to reduce GitHub Actions scheduling delays.
+    - cron: '7 8,11,14,17,20 * * *'
+      timezone: 'Europe/Kyiv'
 
   workflow_dispatch:
 
@@ -46,6 +41,7 @@ jobs:
           NEW_JOB_ANALYZE_LIMIT: '25'
           RECOVERY_CANDIDATES: '8'
 
-          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          # Scheduled runs and manual runs should both execute scanner.py.
+          FORCE_RUN: '1'
 
         run: python scanner.py
